@@ -248,15 +248,18 @@ export function OrderSummary({
     return total
   }
 
-  // Calculer le détail du prix d'un service (unitaire + frais fixes)
-  const getServicePriceDetails = (marking: Marking): {
+  // Type pour les détails de prix d'un service
+  type ServicePriceDetails = {
     unitPrice: number
     quantity: number
     fixedFees: number
     emplacements: number
     expressSurcharge: number
     total: number
-  } | null => {
+  }
+
+  // Calculer le détail du prix d'un service (unitaire + frais fixes)
+  const getServicePriceDetails = (marking: Marking): ServicePriceDetails | null => {
     if (!marking.technique || !marking.techniqueOptions || servicePricing.length === 0) return null
 
     // Calculer la quantité totale pour ce marquage
