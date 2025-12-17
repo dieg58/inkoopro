@@ -589,13 +589,13 @@ export default function Home() {
               showValidationButton={true}
               onValidate={handleSubmit}
               isSubmitting={isSubmitting}
-              canValidate={
+              canValidate={Boolean(
                 quoteItems.length > 0 && 
                 !!clientInfo.name && 
                 !!clientInfo.email && 
                 (delivery.type !== 'livraison' || (delivery.address?.street && delivery.address?.city && delivery.address?.postalCode)) &&
                 (!delivery.billingAddressDifferent || (delivery.billingAddress?.street && delivery.billingAddress?.city && delivery.billingAddress?.postalCode))
-              }
+              )}
             />
           ) : (
             <OrderSummary 
