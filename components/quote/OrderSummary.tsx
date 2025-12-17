@@ -254,6 +254,7 @@ export function OrderSummary({
     quantity: number
     fixedFees: number
     emplacements: number
+    expressSurcharge: number
     total: number
   } | null => {
     if (!marking.technique || !marking.techniqueOptions || servicePricing.length === 0) return null
@@ -284,14 +285,33 @@ export function OrderSummary({
       // Frais fixes : 25€ par couleur
       const fixedFees = (serigraphiePricing.fixedFeePerColor || 0) * colorCount
       
-      // Total = (prix unitaire × quantité + frais fixes) × emplacements
-      const total = ((unitPrice * totalQuantity) + fixedFees) * emplacements
+      // Calculer le total avant supplément express
+      const baseTotal = ((unitPrice * totalQuantity) + fixedFees) * emplacements
+      
+      // Appliquer le supplément express si applicable (10% par jour plus court)
+      let expressSurcharge = 0
+      if (delay) {
+        const standardDays = 10 // 10 jours ouvrables par défaut
+        let daysToCompare = delay.workingDays
+        
+        if (delay.isExpress && delay.expressDays !== undefined) {
+          daysToCompare = delay.expressDays
+        }
+        
+        if (daysToCompare < standardDays) {
+          const surchargePercent = calculateExpressSurcharge(standardDays, daysToCompare)
+          expressSurcharge = (baseTotal * surchargePercent) / 100
+        }
+      }
+      
+      const total = baseTotal + expressSurcharge
       
       return {
         unitPrice,
         quantity: totalQuantity,
         fixedFees,
         emplacements,
+        expressSurcharge,
         total,
       }
     } else if (marking.technique === 'broderie') {
