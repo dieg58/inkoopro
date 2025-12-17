@@ -43,3 +43,9 @@ next-env.d.ts
 
 # Database URL (contient le mot de passe)
 DATABASE_URL.txt
+
+# SQLite database files (local development)
+*.db
+*.db-journal
+prisma/dev.db
+dev.db
