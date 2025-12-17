@@ -709,8 +709,11 @@ export async function createQuoteInOdoo(
     console.log(`✅ ${orderLines.length} ligne(s) de commande préparée(s)`)
 
     // Construire la note du devis
+    const delayDays = quote.delay.isExpress && quote.delay.expressDays !== undefined 
+      ? quote.delay.expressDays 
+      : quote.delay.workingDays
     const noteParts = [
-      `Délai: ${quote.delay.type} (${quote.delay.days} jours)`,
+      `Délai: ${quote.delay.type} (${delayDays} jours)`,
       `Livraison: ${quote.delivery.type}`,
       quote.delivery.type === 'livraison' && quote.delivery.address
         ? `Adresse de livraison: ${quote.delivery.address.street}, ${quote.delivery.address.postalCode} ${quote.delivery.address.city}, ${quote.delivery.address.country}`

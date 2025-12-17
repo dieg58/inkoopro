@@ -29,23 +29,31 @@ export async function loadServiceOdooMapping(): Promise<ServiceOdooMapping[]> {
 export async function saveServiceOdooMapping(mapping: ServiceOdooMapping): Promise<void> {
   try {
     await withRetry(async () => {
-      await prisma.serviceOdooMapping.upsert({
-      where: {
-        technique_textileType: {
+      // Pour les clés uniques composites avec champs nullable, on doit utiliser findFirst + create/update
+      const existing = await prisma.serviceOdooMapping.findFirst({
+        where: {
           technique: mapping.technique,
-          textileType: mapping.textileType || null,
+          textileType: mapping.textileType ?? null,
         },
-      },
-      update: {
-        odooProductName: mapping.odooProductName,
-        textileType: mapping.textileType,
-      },
-      create: {
-        technique: mapping.technique,
-        odooProductName: mapping.odooProductName,
-        textileType: mapping.textileType,
-      },
-    })
+      })
+
+      if (existing) {
+        await prisma.serviceOdooMapping.update({
+          where: { id: existing.id },
+          data: {
+            odooProductName: mapping.odooProductName,
+            textileType: mapping.textileType ?? null,
+          },
+        })
+      } else {
+        await prisma.serviceOdooMapping.create({
+          data: {
+            technique: mapping.technique,
+            odooProductName: mapping.odooProductName,
+            textileType: mapping.textileType ?? null,
+          },
+        })
+      }
     })
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du mapping services Odoo:', error)
@@ -89,17 +97,27 @@ export async function initializeDefaultMappings(): Promise<void> {
     await withRetry(async () => {
       const existing = await prisma.serviceOdooMapping.count()
       if (existing === 0) {
-        // Créer les mappings par défaut
-        await prisma.serviceOdooMapping.createMany({
-        data: [
-          { technique: 'serigraphie', odooProductName: 'SERIGRAPHIECLAIR', textileType: 'clair' },
-          { technique: 'serigraphie', odooProductName: 'SERIGRAPHIEFONCE', textileType: 'fonce' },
-          { technique: 'broderie', odooProductName: 'BRODERIE' },
-          { technique: 'dtf', odooProductName: 'DTFTEXTILE' },
-        ],
-        skipDuplicates: true,
-      })
-      console.log('✅ Mappings par défaut créés')
+        // Créer les mappings par défaut un par un pour éviter les doublons
+        const defaultMappings = [
+          { technique: 'serigraphie', odooProductName: 'SERIGRAPHIECLAIR', textileType: 'clair' as const },
+          { technique: 'serigraphie', odooProductName: 'SERIGRAPHIEFONCE', textileType: 'fonce' as const },
+          { technique: 'broderie', odooProductName: 'BRODERIE', textileType: null },
+          { technique: 'dtf', odooProductName: 'DTFTEXTILE', textileType: null },
+        ]
+        
+        for (const mapping of defaultMappings) {
+          try {
+            await prisma.serviceOdooMapping.create({
+              data: mapping,
+            })
+          } catch (error: any) {
+            // Ignorer les erreurs de doublons
+            if (error.code !== 'P2002') {
+              throw error
+            }
+          }
+        }
+        console.log('✅ Mappings par défaut créés')
       }
     })
   } catch (error) {
