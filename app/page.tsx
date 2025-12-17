@@ -286,6 +286,28 @@ export default function Home() {
     setQuoteItems(quoteItems.filter(item => item.id !== id))
   }
 
+  // Fonction pour vérifier si la commande peut être validée
+  const canValidateOrder = (): boolean => {
+    if (quoteItems.length === 0) return false
+    if (!clientInfo.name || !clientInfo.email) return false
+    
+    // Vérifier l'adresse de livraison si nécessaire
+    if (delivery.type === 'livraison') {
+      if (!delivery.address?.street || !delivery.address?.city || !delivery.address?.postalCode) {
+        return false
+      }
+    }
+    
+    // Vérifier l'adresse de facturation si différente
+    if (delivery.billingAddressDifferent) {
+      if (!delivery.billingAddress?.street || !delivery.billingAddress?.city || !delivery.billingAddress?.postalCode) {
+        return false
+      }
+    }
+    
+    return true
+  }
+
   const handleSubmit = async () => {
     if (quoteItems.length === 0) {
       toast({
