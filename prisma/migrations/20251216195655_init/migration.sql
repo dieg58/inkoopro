@@ -4,8 +4,8 @@ CREATE TABLE "Session" (
     "userId" TEXT NOT NULL,
     "userType" TEXT NOT NULL,
     "token" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "expiresAt" TIMESTAMP NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -20,8 +20,8 @@ CREATE TABLE "Client" (
     "city" TEXT,
     "zip" TEXT,
     "country" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -47,9 +47,9 @@ CREATE TABLE "Quote" (
     "totalHT" REAL NOT NULL,
     "totalTTC" REAL,
     "odooOrderId" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "submittedAt" DATETIME,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
+    "submittedAt" TIMESTAMP,
     CONSTRAINT "Quote_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -63,7 +63,7 @@ CREATE TABLE "ProductCache" (
     "colors" TEXT NOT NULL,
     "sizes" TEXT NOT NULL,
     "variantPrices" TEXT,
-    "lastSync" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "lastSync" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -80,8 +80,8 @@ CREATE TABLE "ServicePricing" (
     "fixedFeeSmallDigitization" REAL,
     "fixedFeeLargeDigitization" REAL,
     "smallDigitizationThreshold" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -90,7 +90,7 @@ CREATE TABLE "PricingConfig" (
     "textileDiscountPercentage" REAL NOT NULL DEFAULT 30,
     "clientProvidedIndexation" REAL NOT NULL DEFAULT 10,
     "expressSurchargePercent" REAL NOT NULL DEFAULT 10,
-    "updatedAt" DATETIME NOT NULL
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateIndex
