@@ -593,8 +593,8 @@ export default function Home() {
                 quoteItems.length > 0 && 
                 !!clientInfo.name && 
                 !!clientInfo.email && 
-                (delivery.type !== 'livraison' || (delivery.address?.street && delivery.address?.city && delivery.address?.postalCode)) &&
-                (!delivery.billingAddressDifferent || (delivery.billingAddress?.street && delivery.billingAddress?.city && delivery.billingAddress?.postalCode))
+                (delivery.type !== 'livraison' || (!!delivery.address?.street && !!delivery.address?.city && !!delivery.address?.postalCode)) &&
+                (!delivery.billingAddressDifferent || (!!delivery.billingAddress?.street && !!delivery.billingAddress?.city && !!delivery.billingAddress?.postalCode))
               )}
             />
           ) : (
