@@ -4,8 +4,8 @@ CREATE TABLE "Session" (
     "userId" TEXT NOT NULL,
     "userType" TEXT NOT NULL,
     "token" TEXT NOT NULL,
-    "expiresAt" TIMESTAMP NOT NULL,
-    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "expiresAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -20,14 +20,15 @@ CREATE TABLE "Client" (
     "city" TEXT,
     "zip" TEXT,
     "country" TEXT,
-    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP NOT NULL
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "Quote" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "clientId" TEXT NOT NULL,
+    "title" TEXT,
     "status" TEXT NOT NULL DEFAULT 'draft',
     "step" TEXT NOT NULL DEFAULT 'products',
     "clientName" TEXT NOT NULL,
@@ -47,9 +48,9 @@ CREATE TABLE "Quote" (
     "totalHT" REAL NOT NULL,
     "totalTTC" REAL,
     "odooOrderId" INTEGER,
-    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP NOT NULL,
-    "submittedAt" TIMESTAMP,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "submittedAt" DATETIME,
     CONSTRAINT "Quote_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -63,7 +64,7 @@ CREATE TABLE "ProductCache" (
     "colors" TEXT NOT NULL,
     "sizes" TEXT NOT NULL,
     "variantPrices" TEXT,
-    "lastSync" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "lastSync" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -80,8 +81,8 @@ CREATE TABLE "ServicePricing" (
     "fixedFeeSmallDigitization" REAL,
     "fixedFeeLargeDigitization" REAL,
     "smallDigitizationThreshold" INTEGER,
-    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP NOT NULL
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
@@ -90,7 +91,17 @@ CREATE TABLE "PricingConfig" (
     "textileDiscountPercentage" REAL NOT NULL DEFAULT 30,
     "clientProvidedIndexation" REAL NOT NULL DEFAULT 10,
     "expressSurchargePercent" REAL NOT NULL DEFAULT 10,
-    "updatedAt" TIMESTAMP NOT NULL
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "ServiceOdooMapping" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "technique" TEXT NOT NULL,
+    "odooProductName" TEXT NOT NULL,
+    "textileType" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateIndex
@@ -137,3 +148,6 @@ CREATE INDEX "ProductCache_category_idx" ON "ProductCache"("category");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ServicePricing_technique_key" ON "ServicePricing"("technique");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ServiceOdooMapping_technique_textileType_key" ON "ServiceOdooMapping"("technique", "textileType");

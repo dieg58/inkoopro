@@ -1,0 +1,157 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Utilisez "sqlite" pour le développement local, "postgresql" pour la production
+  url      = env("DATABASE_URL")
+  // Pour le développement local avec SQLite, changez provider en "sqlite"
+  // et utilisez DATABASE_URL="file:./prisma/dev.db"
+  // Pour la production avec PostgreSQL, utilisez provider = "postgresql"
+  // et DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
+}
+
+// Sessions utilisateur
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  userType  String   // 'admin' | 'client'
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([token])
+  @@index([userId])
+}
+
+// Clients (cache des données Odoo)
+model Client {
+  id          String   @id @default(cuid())
+  odooId      Int      @unique // ID dans Odoo
+  name        String
+  email       String   @unique
+  company     String?
+  phone       String?
+  street      String?
+  city        String?
+  zip         String?
+  country     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  quotes      Quote[]
+  
+  @@index([email])
+  @@index([odooId])
+}
+
+// Devis/Commandes
+model Quote {
+  id              String   @id @default(cuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Titre du devis
+  title           String?  // Titre de la commande
+  
+  // État du devis
+  status          String   @default("draft") // draft, submitted, validated, rejected
+  step            String   @default("products") // products, customization, review
+  
+  // Informations client
+  clientName      String
+  clientEmail     String
+  clientCompany   String?
+  clientPhone     String?
+  
+  // Livraison
+  deliveryType    String   // 'livraison' | 'pickup'
+  deliveryAddress Json?    // { street, city, zip, country }
+  billingAddressDifferent Boolean @default(false)
+  billingAddress  Json?    // { street, city, zip, country }
+  
+  // Délai
+  delayWorkingDays Int
+  delayType       String   // 'standard' | 'express'
+  delayExpressDays Int?
+  
+  // Données du devis
+  selectedProducts Json    // SelectedProduct[]
+  markings         Json    // Marking[]
+  quoteItems       Json    // QuoteItem[]
+  
+  // Totaux
+  totalHT          Float
+  totalTTC         Float?
+  
+  // Odoo
+  odooOrderId     Int?     @unique // ID de la commande dans Odoo
+  
+  // Métadonnées
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  submittedAt     DateTime?
+  
+  @@index([clientId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Cache des produits Odoo
+model ProductCache {
+  id          String   @id @default(cuid())
+  odooId      Int      @unique
+  name        String
+  basePrice   Float
+  category    String?
+  colors      String   // JSON string array
+  sizes       String   // JSON string array
+  variantPrices String? // JSON object
+  lastSync    DateTime @default(now())
+  
+  @@index([odooId])
+  @@index([category])
+}
+
+// Configuration des prix des services
+model ServicePricing {
+  id              String   @id @default(cuid())
+  technique       String   @unique // 'serigraphie' | 'broderie' | 'dtf'
+  minQuantity     Int
+  quantityRanges  String   // JSON array
+  colorCounts     String?  // JSON array (pour sérigraphie)
+  pointRanges     String?  // JSON array (pour broderie)
+  dimensions      String?  // JSON array (pour DTF)
+  prices          String   // JSON object (cross-table prices)
+  fixedFeePerColor Float?  // Pour sérigraphie
+  fixedFeeSmallDigitization Float? // Pour broderie
+  fixedFeeLargeDigitization Float? // Pour broderie
+  smallDigitizationThreshold Int? // Pour broderie
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Configuration globale des prix (une seule instance)
+model PricingConfig {
+  id                      String   @id @default("singleton") // ID fixe pour garantir une seule instance
+  textileDiscountPercentage Float  @default(30)
+  clientProvidedIndexation Float   @default(10)
+  expressSurchargePercent  Float   @default(10) // 10% par jour
+  updatedAt               DateTime @updatedAt
+}
+
+// Mapping des services vers les produits Odoo
+model ServiceOdooMapping {
+  id              String   @id @default(cuid())
+  technique       String   // 'serigraphie' | 'broderie' | 'dtf'
+  odooProductName String   // Nom du produit dans Odoo (ex: 'DTFTEXTILE', 'BRODERIE', 'SERIGRAPHIECLAIR')
+  // Pour sérigraphie, on peut avoir plusieurs mappings selon textileType
+  textileType     String?  // 'clair' | 'fonce' (uniquement pour sérigraphie)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([technique, textileType])
+}

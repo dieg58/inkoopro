@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { Loader2 } from 'lucide-react'
 
 export default function AdminLogin() {
   const router = useRouter()
+  const pathname = usePathname()
   const { toast } = useToast()
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -20,6 +21,7 @@ export default function AdminLogin() {
     setIsLoading(true)
 
     try {
+      // Utiliser le chemin absolu pour éviter les problèmes de locale
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: {
@@ -35,7 +37,9 @@ export default function AdminLogin() {
           title: 'Connexion réussie',
           description: 'Redirection vers le panneau d\'administration...',
         })
-        router.push('/admin')
+        // Utiliser la locale actuelle pour la redirection
+        const currentLocale = pathname.split('/')[1] || 'fr'
+        router.push(`/${currentLocale}/admin`)
       } else {
         toast({
           title: 'Erreur',
