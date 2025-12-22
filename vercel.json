@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx prisma generate && npx prisma db push --skip-generate --accept-data-loss && npm run build",
+  "buildCommand": "npx prisma generate && (npx prisma db push --skip-generate --accept-data-loss || echo 'Database push skipped or failed, continuing build...') && npm run build",
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["cdg1"]

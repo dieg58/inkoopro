@@ -1,4 +1,4 @@
-// This is your Prisma schema file for SQLite (development local)
+// This is your Prisma schema file for PostgreSQL (production)
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -6,9 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite" // Développement local avec SQLite
+  provider = "postgresql" // PostgreSQL pour production
   url      = env("DATABASE_URL")
-  // Pour le développement local : DATABASE_URL="file:./prisma/dev.db"
+  // Pour la production avec PostgreSQL : DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
 }
 
 // Sessions utilisateur
@@ -73,9 +73,9 @@ model Quote {
   // Livraison
   deliveryType    String   // 'livraison' | 'pickup'
   deliveryMethod  String?  // 'pickup' | 'transporteur' | 'coursier' (uniquement si type = 'livraison')
-  deliveryAddress String?  // JSON string (SQLite ne supporte pas Json nativement)
+  deliveryAddress Json?    // { street, city, zip, country }
   billingAddressDifferent Boolean @default(false)
-  billingAddress  String?  // JSON string (SQLite ne supporte pas Json nativement)
+  billingAddress  Json?    // { street, city, zip, country }
   individualPackaging Boolean @default(false) // Emballage individuel (conditionnement sous pochette plastique)
   newCarton        Boolean @default(false) // Carton neuf (au lieu d'un carton réutilisé)
   
@@ -85,9 +85,9 @@ model Quote {
   delayExpressDays Int?
   
   // Données du devis
-  selectedProducts String   // JSON string (SQLite ne supporte pas Json nativement)
-  markings         String   // JSON string (SQLite ne supporte pas Json nativement)
-  quoteItems       String   // JSON string (SQLite ne supporte pas Json nativement)
+  selectedProducts Json    // SelectedProduct[]
+  markings         Json    // Marking[]
+  quoteItems       Json    // QuoteItem[]
   
   // Totaux
   totalHT          Float
@@ -176,4 +176,3 @@ model ServiceOdooMapping {
   
   @@unique([technique, textileType])
 }
-
