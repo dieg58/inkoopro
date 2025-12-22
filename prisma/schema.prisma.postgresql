@@ -176,3 +176,4 @@ model ServiceOdooMapping {
   
   @@unique([technique, textileType])
 }
+
