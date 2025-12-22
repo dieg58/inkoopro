@@ -51,12 +51,15 @@ Le schéma Prisma est déjà configuré pour supporter PostgreSQL. Assurez-vous 
 
 ### 3.3 Configurer les variables d'environnement
 
+**⚠️ IMPORTANT :** La variable `DATABASE_URL` doit être définie **AVANT** le build, car Prisma en a besoin pour générer le client et pousser le schéma.
+
 Dans les **Settings > Environment Variables** de votre projet Vercel, ajoutez :
 
 #### Variables obligatoires
 
 ```env
 # Base de données PostgreSQL
+# ⚠️ Cette variable DOIT être définie pour que le build fonctionne
 DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
 
 # Odoo (si configuré)
@@ -77,7 +80,10 @@ NODE_ENV="production"
 
 ```env
 # Si vous utilisez Vercel Postgres, la DATABASE_URL est automatiquement ajoutée
+# Mais vous devez quand même la vérifier dans Settings > Environment Variables
 ```
+
+**Note :** Si vous utilisez Vercel Postgres, la variable `DATABASE_URL` est automatiquement ajoutée, mais vérifiez qu'elle est bien présente dans **Settings > Environment Variables** et qu'elle est disponible pour **Production, Preview, et Development**.
 
 ### 3.4 Configurer le build
 
