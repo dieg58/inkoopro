@@ -1,4 +1,4 @@
-// This is your Prisma schema file,
+// This is your Prisma schema file for SQLite (development local)
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -6,12 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // PostgreSQL pour production, SQLite pour développement local
+  provider = "sqlite" // Développement local avec SQLite
   url      = env("DATABASE_URL")
-  // Pour le développement local avec SQLite : 
-  //   - Créer un fichier schema.prisma.sqlite avec provider = "sqlite"
-  //   - Ou utiliser DATABASE_URL="file:./prisma/dev.db" et modifier temporairement le provider
-  // Pour la production avec PostgreSQL : DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
+  // Pour le développement local : DATABASE_URL="file:./prisma/dev.db"
 }
 
 // Sessions utilisateur
@@ -76,9 +73,9 @@ model Quote {
   // Livraison
   deliveryType    String   // 'livraison' | 'pickup'
   deliveryMethod  String?  // 'pickup' | 'transporteur' | 'coursier' (uniquement si type = 'livraison')
-  deliveryAddress Json?    // { street, city, zip, country }
+  deliveryAddress String?  // JSON string (SQLite ne supporte pas Json nativement)
   billingAddressDifferent Boolean @default(false)
-  billingAddress  Json?    // { street, city, zip, country }
+  billingAddress  String?  // JSON string (SQLite ne supporte pas Json nativement)
   individualPackaging Boolean @default(false) // Emballage individuel (conditionnement sous pochette plastique)
   newCarton        Boolean @default(false) // Carton neuf (au lieu d'un carton réutilisé)
   
@@ -88,9 +85,9 @@ model Quote {
   delayExpressDays Int?
   
   // Données du devis
-  selectedProducts Json    // SelectedProduct[]
-  markings         Json    // Marking[]
-  quoteItems       Json    // QuoteItem[]
+  selectedProducts String   // JSON string (SQLite ne supporte pas Json nativement)
+  markings         String   // JSON string (SQLite ne supporte pas Json nativement)
+  quoteItems       String   // JSON string (SQLite ne supporte pas Json nativement)
   
   // Totaux
   totalHT          Float
@@ -179,3 +176,4 @@ model ServiceOdooMapping {
   
   @@unique([technique, textileType])
 }
+

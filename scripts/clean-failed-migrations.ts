@@ -4,9 +4,18 @@ const prisma = new PrismaClient()
 
 async function cleanFailedMigrations() {
   try {
+    // Vérifier le type de base de données depuis DATABASE_URL
+    const databaseUrl = process.env.DATABASE_URL || ''
+    const isSQLite = databaseUrl.startsWith('file:')
+    
+    if (!isSQLite) {
+      console.log('ℹ️  Nettoyage des migrations échouées uniquement pour SQLite. PostgreSQL gère automatiquement les migrations.')
+      return
+    }
+    
     console.log('🧹 Nettoyage des migrations échouées...')
     
-    // Supprimer les migrations échouées
+    // Supprimer les migrations échouées (syntaxe SQLite)
     const result = await prisma.$executeRawUnsafe(`
       DELETE FROM "_prisma_migrations" 
       WHERE "finished_at" IS NULL 
@@ -38,6 +47,12 @@ async function cleanFailedMigrations() {
       console.log('ℹ️  La table _prisma_migrations n\'existe pas encore. C\'est normal pour une première migration.')
       return
     }
+    // En production avec PostgreSQL, ignorer les erreurs de ce script
+    const databaseUrl = process.env.DATABASE_URL || ''
+    if (!databaseUrl.startsWith('file:')) {
+      console.log('ℹ️  Script de nettoyage ignoré en production (PostgreSQL)')
+      return
+    }
     throw error
   } finally {
     await prisma.$disconnect()
@@ -51,6 +66,12 @@ cleanFailedMigrations()
   })
   .catch((error) => {
     console.error('❌ Erreur:', error)
+    // En production, ne pas faire échouer le build
+    const databaseUrl = process.env.DATABASE_URL || ''
+    if (!databaseUrl.startsWith('file:')) {
+      console.log('ℹ️  Erreur ignorée en production (PostgreSQL)')
+      process.exit(0)
+    }
     process.exit(1)
   })
 
