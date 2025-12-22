@@ -38,11 +38,15 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Récupérer le devis en cours (draft) le plus récent
+    // Récupérer le devis en cours (draft) le plus récent qui a un titre
+    // Si un devis n'a pas de titre, c'est une ancienne version, on l'ignore
     const quote = await prisma.quote.findFirst({
       where: {
         clientId: dbClient.id,
         status: 'draft',
+        title: {
+          not: null,
+        },
       },
       orderBy: {
         updatedAt: 'desc',
@@ -57,6 +61,7 @@ export async function GET(request: NextRequest) {
       success: true,
       quote: {
         id: quote.id,
+        title: quote.title,
         status: quote.status,
         step: quote.step,
         selectedProducts: quote.selectedProducts,
@@ -64,9 +69,12 @@ export async function GET(request: NextRequest) {
         currentMarkings: quote.markings,
         delivery: {
           type: quote.deliveryType,
+          method: quote.deliveryMethod || undefined,
           address: quote.deliveryAddress,
           billingAddressDifferent: quote.billingAddressDifferent,
           billingAddress: quote.billingAddress,
+          individualPackaging: quote.individualPackaging || false,
+          newCarton: quote.newCarton || false,
         },
         delay: {
           type: quote.delayType,

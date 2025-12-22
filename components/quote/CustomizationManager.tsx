@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { SelectedProduct, TechniqueType, TechniqueOptions, Position, ProductCategory, ServicePricing } from '@/types'
 import { ProductMultiSelector } from './ProductMultiSelector'
 import { TechniqueSelector } from './TechniqueSelector'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { Plus, Trash2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { getMinQuantityForTechnique } from '@/lib/service-pricing'
@@ -18,6 +20,7 @@ interface Marking {
   position: Position | null
   files: Array<{ id: string; name: string; url: string; size: number; type: string }>
   notes: string
+  vectorization?: boolean // Vectorisation du logo par le graphiste (option payante)
 }
 
 interface CustomizationManagerProps {
@@ -28,6 +31,9 @@ interface CustomizationManagerProps {
 
 export function CustomizationManager({ selectedProducts, onComplete, onMarkingsChange }: CustomizationManagerProps) {
   const { toast } = useToast()
+  const t = useTranslations('quote')
+  const techniqueT = useTranslations('technique')
+  const commonT = useTranslations('common')
   const [markings, setMarkings] = useState<Marking[]>([])
   const [currentMarking, setCurrentMarking] = useState<Marking>({
     id: '',
@@ -106,27 +112,27 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
   const handleAddMarking = () => {
     // Valider que tout est rempli
     if (currentMarking.selectedProductIds.length === 0) {
-      toast({
-        title: 'Erreur',
-        description: 'Veuillez sélectionner au moins un produit',
-        variant: 'destructive',
-      })
+        toast({
+          title: commonT('error'),
+          description: t('selectAtLeastOneProduct'),
+          variant: 'destructive',
+        })
       return
     }
 
     if (!currentMarking.technique || !currentMarking.techniqueOptions) {
-      toast({
-        title: 'Erreur',
-        description: 'Veuillez sélectionner une technique et configurer ses options',
-        variant: 'destructive',
-      })
+        toast({
+          title: commonT('error'),
+          description: t('selectTechniqueAndOptions'),
+          variant: 'destructive',
+        })
       return
     }
 
     if (!currentMarking.position) {
       toast({
-        title: 'Erreur',
-        description: 'Veuillez sélectionner une position',
+        title: commonT('error'),
+        description: t('positionRequired'),
         variant: 'destructive',
       })
       return
@@ -135,12 +141,23 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
     // Valider la quantité minimum
     const totalQuantity = getTotalQuantityForSelectedProducts(currentMarking.selectedProductIds)
     const minQuantity = getMinQuantityForTechnique(currentMarking.technique, servicePricing)
-    if (totalQuantity < minQuantity) {
-      toast({
-        title: 'Quantité insuffisante',
-        description: `La quantité minimum pour ${currentMarking.technique} est de ${minQuantity} pièce(s). Vous avez ${totalQuantity} pièce(s).`,
-        variant: 'destructive',
-      })
+    
+    // Logs pour déboguer
+    console.log('🔍 Validation quantité avant ajout:', {
+      technique: currentMarking.technique,
+      totalQuantity,
+      minQuantity,
+      servicePricingLength: servicePricing.length,
+      servicePricingData: servicePricing.find(p => p.technique === currentMarking.technique),
+    })
+    
+    // Valider uniquement si minQuantity > 0 (si minQuantity = 0, pas de minimum requis)
+    if (minQuantity > 0 && totalQuantity < minQuantity) {
+        toast({
+          title: t('insufficientQuantity'),
+          description: t('minQuantityError', { totalQuantity, minQuantity, technique: currentMarking.technique }),
+          variant: 'destructive',
+        })
       return
     }
 
@@ -187,11 +204,11 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
 
   const handleCommand = () => {
     if (markings.length === 0) {
-      toast({
-        title: 'Erreur',
-        description: 'Veuillez ajouter au moins un marquage',
-        variant: 'destructive',
-      })
+        toast({
+          title: commonT('error'),
+          description: t('addAtLeastOneMarking'),
+          variant: 'destructive',
+        })
       return
     }
 
@@ -200,14 +217,14 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
 
   const getProductName = (productId: string) => {
     const product = selectedProducts.find(p => p.id === productId)
-    return product?.product.name || 'Produit inconnu'
+    return product?.product.name || t('unknownProduct')
   }
 
   const getTechniqueName = (technique: TechniqueType) => {
     const names: Record<TechniqueType, string> = {
-      serigraphie: 'Sérigraphie',
-      broderie: 'Broderie',
-      dtf: 'DTF',
+      serigraphie: techniqueT('serigraphy'),
+      broderie: techniqueT('embroidery'),
+      dtf: techniqueT('dtf'),
     }
     return names[technique] || technique
   }
@@ -216,15 +233,15 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>2. Personnalisation des produits</CardTitle>
+          <CardTitle>3. {t('customization')}</CardTitle>
           <CardDescription>
-            Sélectionnez les produits et configurez le marquage. Vous pouvez ajouter plusieurs marquages.
+            {t('customizationDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Sélection des produits */}
-          <div className="space-y-2">
-            <h3 className="font-semibold">Produits à personnaliser</h3>
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">{t('productsToCustomize')}</Label>
             <ProductMultiSelector
               selectedProducts={selectedProducts}
               selectedProductIds={currentMarking.selectedProductIds}
@@ -232,21 +249,19 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
             />
           </div>
 
-          {/* Choix de la technique et du marquage */}
+          {/* Configuration du marquage */}
           {currentMarking.selectedProductIds.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="font-semibold">Configuration du marquage</h3>
+            <div className="space-y-4 pt-4 border-t">
               
               {/* Avertissement quantité minimum */}
               {currentMarking.technique && (() => {
                 const totalQuantity = getTotalQuantityForSelectedProducts(currentMarking.selectedProductIds)
                 const minQuantity = getMinQuantityForTechnique(currentMarking.technique, servicePricing)
-                if (totalQuantity < minQuantity) {
+                if (minQuantity > 0 && totalQuantity < minQuantity) {
                   return (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                       <p className="text-sm text-yellow-800">
-                        <strong>⚠️ Quantité minimum requise :</strong> La quantité minimum pour {currentMarking.technique} est de {minQuantity} pièce(s). 
-                        Vous avez actuellement {totalQuantity} pièce(s).
+                        <strong>⚠️ {t('minQuantityRequired')} :</strong> {t('minQuantityForTechnique', { technique: currentMarking.technique, minQuantity, totalQuantity })}
                       </p>
                     </div>
                   )
@@ -256,7 +271,37 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
 
               <TechniqueSelector
                 selectedTechnique={currentMarking.technique}
+                servicePricing={servicePricing}
                 onTechniqueChange={(technique) => {
+                  // Vérifier la quantité minimum avant d'autoriser la sélection de la technique
+                  if (technique && currentMarking.selectedProductIds.length > 0) {
+                    const totalQuantity = getTotalQuantityForSelectedProducts(currentMarking.selectedProductIds)
+                    
+                    // Récupérer la quantité minimum depuis la base de données (via servicePricing)
+                    const minQuantity = getMinQuantityForTechnique(technique, servicePricing)
+                    
+                    // Logs pour déboguer
+                    console.log('🔍 Validation quantité technique:', {
+                      technique,
+                      totalQuantity,
+                      minQuantity,
+                      servicePricingLength: servicePricing.length,
+                      servicePricingData: servicePricing.find(p => p.technique === technique),
+                    })
+                    
+                    // Valider la quantité minimum (uniquement si minQuantity > 0)
+                    if (minQuantity > 0 && totalQuantity < minQuantity) {
+                      const techniqueName = getTechniqueName(technique)
+                      toast({
+                        title: t('insufficientQuantity'),
+                        description: t('techniqueMinQuantityError', { technique: techniqueName, minQuantity, totalQuantity }),
+                        variant: 'destructive',
+                        duration: 6000, // Afficher plus longtemps pour que le message soit lu
+                      })
+                      return // Empêcher la sélection de la technique
+                    }
+                  }
+                  
                   setCurrentMarking({
                     ...currentMarking,
                     technique,
@@ -264,6 +309,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                     position: null,
                     files: [],
                     notes: '',
+                    vectorization: false,
                   })
                 }}
                 options={currentMarking.techniqueOptions}
@@ -295,90 +341,69 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                   })
                 }}
                 productCategory={getProductCategory()}
+                vectorization={currentMarking.vectorization || false}
+                onVectorizationChange={(vectorization) => {
+                  setCurrentMarking({
+                    ...currentMarking,
+                    vectorization,
+                  })
+                }}
               />
 
               {/* Bouton pour ajouter ce marquage */}
-              <Button onClick={handleAddMarking} className="w-full" size="lg">
+              <Button 
+                onClick={handleAddMarking} 
+                className="w-full" 
+                size="lg"
+                disabled={!currentMarking.technique || !currentMarking.techniqueOptions || !currentMarking.position}
+              >
                 <Plus className="h-4 w-4 mr-2" />
-                Ajouter ce marquage
-              </Button>
-            </div>
-          )}
-
-          {/* Liste des marquages ajoutés */}
-          {markings.length > 0 && (
-            <div className="space-y-4 pt-4 border-t">
-              <h3 className="font-semibold">Marquages ajoutés ({markings.length})</h3>
-              <div className="space-y-3">
-                {markings.map((marking) => (
-                  <Card key={marking.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-2">
-                          <div>
-                            <span className="font-medium">Produits : </span>
-                            <span className="text-sm text-muted-foreground">
-                              {marking.selectedProductIds.map(getProductName).join(', ')}
-                            </span>
-                          </div>
-                          {marking.technique && (
-                            <div>
-                              <span className="font-medium">Technique : </span>
-                              <span className="text-sm text-muted-foreground">
-                                {getTechniqueName(marking.technique)}
-                              </span>
-                            </div>
-                          )}
-                          {marking.position && (
-                            <div>
-                              <span className="font-medium">Position : </span>
-                              <span className="text-sm text-muted-foreground">
-                                {marking.position.type === 'custom' ? marking.position.customDescription : marking.position.type}
-                              </span>
-                            </div>
-                          )}
-                          {marking.files.length > 0 && (
-                            <div>
-                              <span className="font-medium">Fichiers : </span>
-                              <span className="text-sm text-muted-foreground">
-                                {marking.files.length} fichier{marking.files.length > 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          )}
-                          {marking.notes && (
-                            <div>
-                              <span className="font-medium">Notes : </span>
-                              <span className="text-sm text-muted-foreground">
-                                {marking.notes.substring(0, 50)}{marking.notes.length > 50 ? '...' : ''}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveMarking(marking.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Bouton Commander */}
-          {markings.length > 0 && (
-            <div className="pt-4 border-t">
-              <Button onClick={handleCommand} className="w-full" size="lg">
-                Commander
+                {t('addMarking')}
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Liste des marquages ajoutés */}
+      {markings.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('addedMarkings', { count: markings.length })}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {markings.map((marking, index) => (
+                <div key={marking.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1 text-sm">
+                    <span className="font-medium">#{index + 1} </span>
+                    <span>{marking.selectedProductIds.map(getProductName).join(', ')} - </span>
+                    <span className="text-muted-foreground">
+                      {marking.technique ? getTechniqueName(marking.technique) : t('notConfigured')}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveMarking(marking.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Bouton Continuer */}
+      {markings.length > 0 && (
+        <div className="flex justify-end">
+          <Button onClick={handleCommand} className="w-full md:w-auto" size="lg">
+            {t('continueToReview')}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -108,6 +108,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   <Settings className="h-4 w-4" />
                   <span>Facteurs de prix</span>
                 </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => router.push('/admin/clients')}
+                  className="flex items-center space-x-2"
+                >
+                  <Users className="h-4 w-4" />
+                  <span>Clients</span>
+                </Button>
               </div>
             </div>
             <Button variant="outline" onClick={handleLogout} className="flex items-center space-x-2">

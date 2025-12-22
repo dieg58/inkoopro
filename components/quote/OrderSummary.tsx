@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { SelectedProduct, ProductSize, ServicePricing, QuantityRange, Delay } from '@/types'
+import { useTranslations } from 'next-intl'
+import { SelectedProduct, ProductSize, ServicePricing, QuantityRange, Delay, Delivery } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { delayOptions } from '@/lib/data'
 import { calculateExpressSurcharge } from '@/lib/delivery-dates'
+import { calculateShippingCost, calculateCartons } from '@/lib/shipping'
 import { Loader2 } from 'lucide-react'
 
 interface Marking {
@@ -18,12 +20,14 @@ interface Marking {
   position: { type: string; customDescription?: string } | null
   files?: Array<{ id: string; name: string; url: string; size: number; type: string }>
   notes?: string
+  vectorization?: boolean // Vectorisation du logo par le graphiste (option payante)
 }
 
 interface OrderSummaryProps {
   selectedProducts: SelectedProduct[]
   markings: Marking[]
   delay?: Delay // Délai pour calculer le supplément express
+  delivery?: Delivery // Informations de livraison pour calculer les frais de port
   showValidationButton?: boolean // Afficher le bouton de validation
   onValidate?: () => void // Callback pour la validation
   isSubmitting?: boolean // État de soumission
@@ -34,14 +38,26 @@ export function OrderSummary({
   selectedProducts, 
   markings, 
   delay,
+  delivery,
   showValidationButton = false,
   onValidate,
   isSubmitting = false,
   canValidate = false,
 }: OrderSummaryProps) {
+  const t = useTranslations('quote')
+  const summaryT = useTranslations('summary')
+  const commonT = useTranslations('common')
   const [servicePricing, setServicePricing] = useState<ServicePricing[]>([])
-  const [pricingConfig, setPricingConfig] = useState<{ textileDiscountPercentage: number }>({
+  const [pricingConfig, setPricingConfig] = useState<{
+    textileDiscountPercentage: number
+    individualPackagingPrice: number
+    newCartonPrice: number
+    vectorizationPrice: number
+  }>({
     textileDiscountPercentage: 30,
+    individualPackagingPrice: 0,
+    newCartonPrice: 0,
+    vectorizationPrice: 0,
   })
   const [cgvAccepted, setCgvAccepted] = useState(false)
 
@@ -70,6 +86,9 @@ export function OrderSummary({
         if (data.success && data.config) {
           setPricingConfig({
             textileDiscountPercentage: data.config.textileDiscountPercentage || 30,
+            individualPackagingPrice: data.config.individualPackagingPrice || 0,
+            newCartonPrice: data.config.newCartonPrice || 0,
+            vectorizationPrice: data.config.vectorizationPrice || 0,
           })
         }
       } catch (error) {
@@ -81,7 +100,7 @@ export function OrderSummary({
 
   const getProductName = (productId: string) => {
     const product = selectedProducts.find(p => p.id === productId)
-    return product?.product.name || 'Produit inconnu'
+    return product?.product.name || t('unknownProduct')
   }
 
   const getProductTotalQuantity = (productId: string) => {
@@ -275,6 +294,8 @@ export function OrderSummary({
     if (marking.technique === 'serigraphie') {
       const serigraphieOptions = marking.techniqueOptions as any
       const colorCount = serigraphieOptions.nombreCouleurs || 1
+      const textileType = serigraphieOptions.textileType || 'clair' // Par défaut : clair
+      const selectedOptions = serigraphieOptions.selectedOptions || [] // Options sélectionnées
       const emplacements = 1 // Une seule position par marquage maintenant
       const serigraphiePricing = pricing as any
       
@@ -283,13 +304,30 @@ export function OrderSummary({
       if (!quantityRange) return null
       
       const key = `${quantityRange.label}-${colorCount}`
-      const unitPrice = serigraphiePricing.prices[key] || 0
+      // Utiliser le bon tableau de prix selon le type de textile
+      const prices = textileType === 'clair' 
+        ? (serigraphiePricing.pricesClair || serigraphiePricing.prices) 
+        : (serigraphiePricing.pricesFonce || serigraphiePricing.prices)
+      const unitPrice = prices[key] || 0
       
       // Frais fixes : 25€ par couleur
       const fixedFees = (serigraphiePricing.fixedFeePerColor || 0) * colorCount
       
+      // Calculer le total avant options et supplément express
+      const basePrice = (unitPrice * totalQuantity) + fixedFees
+      
+      // Appliquer les pourcentages supplémentaires des options sélectionnées
+      let optionsSurcharge = 0
+      if (selectedOptions.length > 0 && serigraphiePricing.options) {
+        const totalSurchargePercent = selectedOptions.reduce((total: number, optionId: string) => {
+          const option = serigraphiePricing.options.find((opt: any) => opt.id === optionId)
+          return total + (option?.surchargePercentage || 0)
+        }, 0)
+        optionsSurcharge = (basePrice * totalSurchargePercent) / 100
+      }
+      
       // Calculer le total avant supplément express
-      const baseTotal = ((unitPrice * totalQuantity) + fixedFees) * emplacements
+      const baseTotal = (basePrice + optionsSurcharge) * emplacements
       
       // Appliquer le supplément express si applicable (10% par jour plus court)
       let expressSurcharge = 0
@@ -312,7 +350,7 @@ export function OrderSummary({
       return {
         unitPrice,
         quantity: totalQuantity,
-        fixedFees,
+        fixedFees: fixedFees + (optionsSurcharge / emplacements), // Inclure le surcoût des options dans les frais fixes pour l'affichage
         emplacements,
         expressSurcharge,
         total,
@@ -320,6 +358,7 @@ export function OrderSummary({
     } else if (marking.technique === 'broderie') {
       const broderieOptions = marking.techniqueOptions as any
       const pointCount = broderieOptions.nombrePoints || 0
+      const embroiderySize = broderieOptions.embroiderySize || 'petite' // Par défaut : petite
       const emplacements = 1 // Une seule position par marquage maintenant
       const broderiePricing = pricing as any
       
@@ -334,7 +373,11 @@ export function OrderSummary({
       if (!pointRange) return null
       
       const key = `${quantityRange.label}-${pointRange.label}`
-      const unitPrice = broderiePricing.prices[key] || 0
+      // Utiliser le bon tableau de prix selon la taille
+      const prices = embroiderySize === 'petite' 
+        ? (broderiePricing.pricesPetite || broderiePricing.prices) 
+        : (broderiePricing.pricesGrande || broderiePricing.prices)
+      const unitPrice = prices[key] || 0
       
       // Frais fixes de digitalisation
       const fixedFees = pointCount <= (broderiePricing.smallDigitizationThreshold || 10000)
@@ -443,21 +486,69 @@ export function OrderSummary({
     }, 0)
   }
 
+  // Calculer les frais de port
+  const getShippingCost = (): number => {
+    // Les frais de port ne s'appliquent que si c'est une livraison (pas un retrait sur place)
+    if (delivery?.type === 'pickup') {
+      return 0
+    }
+    return calculateShippingCost(selectedProducts)
+  }
+
+  // Calculer le coût de l'emballage individuel
+  const getIndividualPackagingCost = (): number => {
+    if (!delivery?.individualPackaging || pricingConfig.individualPackagingPrice === 0) {
+      return 0
+    }
+    // Calculer le nombre total de pièces
+    const totalQuantity = getTotalQuantity()
+    return totalQuantity * pricingConfig.individualPackagingPrice
+  }
+
+  // Calculer le coût des cartons neufs
+  const getNewCartonCost = (): number => {
+    if (!delivery?.newCarton || pricingConfig.newCartonPrice === 0) {
+      return 0
+    }
+    // Calculer le nombre de cartons
+    const cartonsCount = getCartonsCount()
+    return cartonsCount * pricingConfig.newCartonPrice
+  }
+
+  // Calculer le nombre de cartons
+  const getCartonsCount = (): number => {
+    return calculateCartons(selectedProducts)
+  }
+
+  // Calculer le coût de la vectorisation des logos
+  const getVectorizationCost = (): number => {
+    if (pricingConfig.vectorizationPrice === 0) {
+      return 0
+    }
+    // Compter le nombre de marquages avec vectorisation activée
+    const vectorizationCount = markings.filter(m => m.vectorization && m.files && m.files.length > 0).length
+    return vectorizationCount * pricingConfig.vectorizationPrice
+  }
+
   // Calculer le total général
   const getGrandTotal = (): number => {
     const productsTotal = Array.from(new Set(markings.flatMap(m => m.selectedProductIds))).reduce((total, productId) => {
       return total + getProductTotal(productId)
     }, 0)
     const servicesTotal = getServicesTotal()
-    return productsTotal + servicesTotal
+    const shippingCost = getShippingCost()
+    const packagingCost = getIndividualPackagingCost()
+    const cartonCost = getNewCartonCost()
+    const vectorizationCost = getVectorizationCost()
+    return productsTotal + servicesTotal + shippingCost + packagingCost + cartonCost + vectorizationCost
   }
 
   if (markings.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Votre commande</CardTitle>
-          <CardDescription>Votre commande est vide</CardDescription>
+          <CardTitle>{t('yourOrder')}</CardTitle>
+          <CardDescription>{t('emptyOrder')}</CardDescription>
         </CardHeader>
       </Card>
     )
@@ -466,9 +557,9 @@ export function OrderSummary({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Votre commande</CardTitle>
+        <CardTitle>{t('yourOrder')}</CardTitle>
         <CardDescription>
-          {markings.length} marquage{markings.length > 1 ? 's' : ''} • {getTotalProducts()} produit{getTotalProducts() > 1 ? 's' : ''} • {getTotalQuantity()} pièce{getTotalQuantity() > 1 ? 's' : ''}
+          {markings.length} {t('markings')} • {getTotalProducts()} {getTotalProducts() > 1 ? t('products') : t('product')} • {getTotalQuantity()} {t('pieces')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -525,10 +616,19 @@ export function OrderSummary({
               let serviceDetails = ''
               if (marking.technique === 'serigraphie') {
                 const opts = marking.techniqueOptions as any
-                serviceDetails = `${opts.nombreCouleurs || 1} couleur${(opts.nombreCouleurs || 1) > 1 ? 's' : ''}, 1 emplacement`
+                const textileLabel = opts.textileType === 'fonce' ? summaryT('darkTextile') : summaryT('lightTextile')
+                const selectedOptions = opts.selectedOptions || []
+                const serigraphiePricing = servicePricing.find((p: any) => p.technique === 'serigraphie')
+                const optionsLabels = selectedOptions.map((optId: string) => {
+                  const option = serigraphiePricing?.options?.find((opt: any) => opt.id === optId)
+                  return option ? option.name : optId
+                })
+                const optionsText = optionsLabels.length > 0 ? `, ${optionsLabels.join(', ')}` : ''
+                serviceDetails = `${textileLabel}, ${opts.nombreCouleurs || 1} couleur${(opts.nombreCouleurs || 1) > 1 ? 's' : ''}${optionsText}, 1 emplacement`
               } else if (marking.technique === 'broderie') {
                 const opts = marking.techniqueOptions as any
-                serviceDetails = `${(opts.nombrePoints || 0).toLocaleString()} points, 1 emplacement`
+                const sizeLabel = opts.embroiderySize === 'grande' ? techniqueT('large') : techniqueT('small')
+                serviceDetails = `${sizeLabel}, ${(opts.nombrePoints || 0).toLocaleString()} points, 1 emplacement`
               } else if (marking.technique === 'dtf') {
                 const opts = marking.techniqueOptions as any
                 serviceDetails = `${opts.dimension || 'N/A'}, 1 emplacement`
@@ -549,7 +649,7 @@ export function OrderSummary({
                         {techniqueName}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {priceDetails.quantity} pièce{priceDetails.quantity > 1 ? 's' : ''} • {serviceDetails}
+                        {priceDetails.quantity} {t('pieces')} • {serviceDetails}
                       </div>
                     </div>
                     <div className="font-semibold text-right min-w-[60px]">
@@ -581,18 +681,84 @@ export function OrderSummary({
           </div>
         )}
 
+        {/* Frais de port */}
+        {delivery?.type !== 'pickup' && selectedProducts.length > 0 && (
+          <div className="space-y-2 border-b pb-3">
+            <div className="flex justify-between items-center text-sm">
+              <div>
+                <span className="font-medium">{summaryT('shipping')}</span>
+                <span className="text-xs text-muted-foreground ml-2">
+                  ({getCartonsCount()} {summaryT('carton')}{getCartonsCount() > 1 ? 's' : ''} × 13,65 €)
+                </span>
+              </div>
+              <div className="font-semibold">
+                {getShippingCost().toFixed(2)} € HT
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Options de livraison */}
+        {(getIndividualPackagingCost() > 0 || getNewCartonCost() > 0) && (
+          <div className="space-y-2 border-b pb-3">
+            {getIndividualPackagingCost() > 0 && (
+              <div className="flex justify-between items-center text-sm">
+                <div>
+                  <span className="font-medium">{summaryT('packaging')}</span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    ({getTotalQuantity()} {t('pieces')} × {pricingConfig.individualPackagingPrice.toFixed(2)} €)
+                  </span>
+                </div>
+                <div className="font-semibold">
+                  {getIndividualPackagingCost().toFixed(2)} € HT
+                </div>
+              </div>
+            )}
+            {getNewCartonCost() > 0 && (
+              <div className="flex justify-between items-center text-sm">
+                <div>
+                  <span className="font-medium">{summaryT('carton')}</span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    ({getCartonsCount()} {summaryT('carton')}{getCartonsCount() > 1 ? 's' : ''} × {pricingConfig.newCartonPrice.toFixed(2)} €)
+                  </span>
+                </div>
+                <div className="font-semibold">
+                  {getNewCartonCost().toFixed(2)} € HT
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Vectorisation des logos */}
+        {getVectorizationCost() > 0 && (
+          <div className="space-y-2 border-b pb-3">
+            <div className="flex justify-between items-center text-sm">
+              <div>
+                <span className="font-medium">{summaryT('vectorization')}</span>
+                <span className="text-xs text-muted-foreground ml-2">
+                  ({markings.filter(m => m.vectorization && m.files && m.files.length > 0).length} {summaryT('logo')}{markings.filter(m => m.vectorization && m.files && m.files.length > 0).length > 1 ? 's' : ''} × {pricingConfig.vectorizationPrice.toFixed(2)} €)
+                </span>
+              </div>
+              <div className="font-semibold">
+                {getVectorizationCost().toFixed(2)} € HT
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Total */}
         <div className="pt-2 border-t">
           <div className="flex justify-between items-center font-bold text-lg">
-            <span>TOTAL HT</span>
+            <span>{summaryT('totalHT')}</span>
             <span>{getGrandTotal().toFixed(2)} € HT</span>
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            Tous les prix sont hors taxes
+            {summaryT('pricesExcludeTax')}
           </div>
           {pricingConfig.textileDiscountPercentage > 0 && (
             <div className="text-xs text-muted-foreground mt-1">
-              Réduction textile: {pricingConfig.textileDiscountPercentage}%
+              {summaryT('textileDiscount', { percentage: pricingConfig.textileDiscountPercentage })}
             </div>
           )}
         </div>
@@ -610,7 +776,7 @@ export function OrderSummary({
                 htmlFor="cgv"
                 className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
               >
-                J'accepte les conditions générales de vente
+                {summaryT('acceptCGV')}
               </Label>
             </div>
             <Button
@@ -622,10 +788,10 @@ export function OrderSummary({
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Envoi en cours...
+                  {summaryT('sending')}
                 </>
               ) : (
-                'Valider et envoyer le devis'
+                summaryT('validateAndSend')
               )}
             </Button>
           </div>

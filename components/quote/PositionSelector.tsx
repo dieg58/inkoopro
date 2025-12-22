@@ -54,7 +54,7 @@ export function PositionSelector({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>5. Position du marquage</CardTitle>
+        <CardTitle>Position du marquage</CardTitle>
         <CardDescription>
           Choisissez la position du marquage ({positions.length}/{nombreEmplacements} emplacements)
         </CardDescription>

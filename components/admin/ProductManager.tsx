@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Product, ProductCategory } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,8 @@ import { Plus, Trash2, Edit2, Save, X } from 'lucide-react'
 
 export function ProductManager() {
   const { toast } = useToast()
+  const t = useTranslations('admin.products')
+  const commonT = useTranslations('common')
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -34,24 +37,52 @@ export function ProductManager() {
       const data = await response.json()
       if (data.success) {
         setProducts(data.products || [])
-        if (data.source === 'odoo') {
-          toast({
-            title: 'Produits synchronisés',
-            description: `${data.count} produit(s) récupéré(s) depuis Odoo`,
-          })
-        } else if (data.source === 'fallback') {
-          toast({
-            title: 'Attention',
-            description: 'Aucun produit trouvé dans Odoo, affichage des produits d\'exemple',
-            variant: 'destructive',
-          })
-        }
       }
     } catch (error) {
       console.error('Erreur chargement produits:', error)
       toast({
         title: 'Erreur',
         description: 'Impossible de charger les produits',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSync = async (limit?: number) => {
+    try {
+      setLoading(true)
+      console.log('🔄 Début de la synchronisation...', { limit })
+      
+      const response = await fetch('/api/products/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceRefresh: true, limit }),
+      })
+      
+      const data = await response.json()
+      console.log('📦 Réponse synchronisation:', data)
+      
+      if (data.success) {
+        toast({
+          title: t('syncSuccess'),
+          description: data.message || `${data.count} produit(s) synchronisé(s)`,
+        })
+        // Recharger les produits après la synchronisation
+        await fetchProducts()
+      } else {
+        toast({
+          title: 'Erreur de synchronisation',
+          description: data.error || 'Impossible de synchroniser les produits',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Erreur synchronisation produits:', error)
+      toast({
+        title: 'Erreur',
+        description: 'Erreur lors de la synchronisation',
         variant: 'destructive',
       })
     } finally {
@@ -119,62 +150,19 @@ export function ProductManager() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={fetchProducts}>
-            Actualiser (Cache)
+          <Button variant="outline" onClick={fetchProducts} disabled={loading}>
+            Actualiser
           </Button>
           <Button 
-            variant="outline" 
-            onClick={async () => {
-              try {
-                setLoading(true)
-                const response = await fetch('/api/products?refresh=true')
-                const data = await response.json()
-                if (data.success) {
-                  setProducts(data.products || [])
-                  toast({
-                    title: 'Produits mis à jour',
-                    description: `${data.count} produit(s) récupéré(s) depuis Odoo (refresh forcé)`,
-                  })
-                }
-              } catch (error) {
-                console.error('Erreur refresh produits:', error)
-                toast({
-                  title: 'Erreur',
-                  description: 'Impossible de rafraîchir les produits',
-                  variant: 'destructive',
-                })
-              } finally {
-                setLoading(false)
-              }
-            }}
+            variant="default" 
+            onClick={() => handleSync()}
+            disabled={loading}
           >
-            Forcer la mise à jour
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={async () => {
-              try {
-                const response = await fetch('/api/admin/test-odoo')
-                const data = await response.json()
-                toast({
-                  title: data.success ? 'Test Odoo' : 'Erreur',
-                  description: data.message || data.error,
-                  variant: data.success ? 'default' : 'destructive',
-                })
-              } catch (error) {
-                toast({
-                  title: 'Erreur',
-                  description: 'Erreur lors du test de connexion Odoo',
-                  variant: 'destructive',
-                })
-              }
-            }}
-          >
-            Tester Odoo
+            {loading ? 'Synchronisation...' : 'Synchroniser tous les produits'}
           </Button>
           <Button onClick={handleAdd}>
             <Plus className="h-4 w-4 mr-2" />
-            Ajouter un produit
+            {t('addProduct')}
           </Button>
         </div>
       </div>
@@ -182,7 +170,7 @@ export function ProductManager() {
       {editingId && (
         <Card>
           <CardHeader>
-            <CardTitle>{editingId === 'new' ? 'Nouveau produit' : 'Modifier le produit'}</CardTitle>
+            <CardTitle>{editingId === 'new' ? t('newProduct') : t('editProduct')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -224,56 +212,60 @@ export function ProductManager() {
             <div className="flex justify-end space-x-2">
               <Button variant="outline" onClick={handleCancel}>
                 <X className="h-4 w-4 mr-2" />
-                Annuler
+                {commonT('cancel')}
               </Button>
               <Button onClick={handleSave}>
                 <Save className="h-4 w-4 mr-2" />
-                Enregistrer
+                {commonT('save')}
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid gap-4">
+      <div className="space-y-2">
         {products.map((product) => (
-          <Card key={product.id}>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h4 className="font-semibold text-lg">{product.name}</h4>
-                  {product.description && (
-                    <p className="text-sm text-muted-foreground mt-1">{product.description}</p>
-                  )}
-                  {product.category && (
-                    <span className="inline-block mt-2 px-2 py-1 text-xs bg-primary/10 text-primary rounded">
-                      {product.category}
-                    </span>
-                  )}
-                  <div className="mt-2 text-sm">
-                    <p><strong>Tailles:</strong> {product.availableSizes.join(', ')}</p>
-                    <p><strong>Couleurs:</strong> {product.availableColors.join(', ')}</p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleEdit(product)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleDelete(product.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+          <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium text-sm truncate">{product.name}</h4>
+                {product.supplierReference && (
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                    {product.supplierReference}
+                  </span>
+                )}
+                {product.defaultCode && !product.supplierReference && (
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                    {product.defaultCode}
+                  </span>
+                )}
+                {product.category && (
+                  <span className="text-xs text-muted-foreground">
+                    {product.category}
+                  </span>
+                )}
               </div>
-            </CardContent>
-          </Card>
+              <div className="text-xs text-muted-foreground mt-1">
+                {product.availableSizes.length} taille(s) • {product.availableColors.length} couleur(s)
+              </div>
+            </div>
+            <div className="flex items-center gap-2 ml-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleEdit(product)}
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDelete(product.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         ))}
       </div>
     </div>

@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Delivery, Delay } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { delayOptions } from '@/lib/data'
 import { Edit2, Check, X, AlertCircle } from 'lucide-react'
@@ -25,6 +27,8 @@ export function DeliverySelector({
   delay,
   onDelayChange,
 }: DeliverySelectorProps) {
+  const t = useTranslations('delivery')
+  const commonT = useTranslations('common')
   const [isEditingAddress, setIsEditingAddress] = useState(false)
   const [editedAddress, setEditedAddress] = useState(delivery.address)
   const [isEditingBillingAddress, setIsEditingBillingAddress] = useState(false)
@@ -106,20 +110,20 @@ export function DeliverySelector({
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>7. Livraison ou retrait</CardTitle>
-          <CardDescription>Choisissez comment vous souhaitez recevoir votre commande</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div>
+        <h3 className="font-semibold text-base mb-3">{t('deliveryType')}</h3>
+        <Card>
+          <CardContent className="pt-6 space-y-4">
           <div className="space-y-2">
-            <Label>Type de livraison</Label>
+            <Label>{t('deliveryType')}</Label>
             <Select
               value={delivery.type}
               onValueChange={(value) =>
                 onDeliveryChange({
                   ...delivery,
                   type: value as 'livraison' | 'pickup',
+                  // Si Pick-Up, pas besoin de méthode de livraison
+                  method: value === 'pickup' ? undefined : delivery.method,
                 })
               }
             >
@@ -127,20 +131,43 @@ export function DeliverySelector({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="livraison">Livraison</SelectItem>
-                <SelectItem value="pickup">Retrait sur place</SelectItem>
+                <SelectItem value="livraison">{t('delivery')}</SelectItem>
+                <SelectItem value="pickup">{t('pickup')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {delivery.type === 'livraison' && (
             <div className="space-y-4 pt-4 border-t">
+              {/* Méthode de livraison */}
+              <div className="space-y-2">
+                <Label>{t('method')}</Label>
+                <Select
+                  value={delivery.method || 'transporteur'}
+                  onValueChange={(value) =>
+                    onDeliveryChange({
+                      ...delivery,
+                      method: value as 'pickup' | 'transporteur' | 'coursier',
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pickup">{t('pickup')}</SelectItem>
+                    <SelectItem value="transporteur">{t('carrier')}</SelectItem>
+                    <SelectItem value="coursier">{t('courier')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {hasCompleteAddress && !isEditingAddress ? (
                 // Mode affichage avec bouton d'édition
                 <div className="space-y-3">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
-                      <Label className="text-sm text-gray-500 mb-2 block">Adresse de livraison</Label>
+                      <Label className="text-sm text-gray-500 mb-2 block">{t('address')}</Label>
                       <div className="bg-gray-50 p-4 rounded-md space-y-1">
                         <p className="font-medium">{delivery.address?.street}</p>
                         <p>{delivery.address?.postalCode} {delivery.address?.city}</p>
@@ -161,7 +188,7 @@ export function DeliverySelector({
                 // Mode édition
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <Label>Adresse de livraison</Label>
+                    <Label>{t('address')}</Label>
                     {hasCompleteAddress && isEditingAddress && (
                       <div className="flex gap-2">
                         <Button
@@ -182,7 +209,7 @@ export function DeliverySelector({
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Rue</Label>
+                    <Label>{t('street')}</Label>
                     <Input
                       value={editedAddress?.street || ''}
                       onChange={(e) =>
@@ -194,12 +221,12 @@ export function DeliverySelector({
                           country: editedAddress?.country || 'France',
                         })
                       }
-                      placeholder="Rue et numéro"
+                      placeholder={t('street')}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Code postal</Label>
+                      <Label>{t('postalCode')}</Label>
                       <Input
                         value={editedAddress?.postalCode || ''}
                         onChange={(e) =>
@@ -211,11 +238,11 @@ export function DeliverySelector({
                             country: editedAddress?.country || 'France',
                           })
                         }
-                        placeholder="Code postal"
+                        placeholder={t('postalCode')}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Ville</Label>
+                      <Label>{t('city')}</Label>
                       <Input
                         value={editedAddress?.city || ''}
                         onChange={(e) =>
@@ -227,12 +254,12 @@ export function DeliverySelector({
                             country: editedAddress?.country || 'France',
                           })
                         }
-                        placeholder="Ville"
+                        placeholder={t('city')}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Pays</Label>
+                    <Label>{t('country')}</Label>
                     <Input
                       value={editedAddress?.country || 'France'}
                       onChange={(e) =>
@@ -244,12 +271,12 @@ export function DeliverySelector({
                           postalCode: editedAddress?.postalCode || '',
                         })
                       }
-                      placeholder="Pays"
+                      placeholder={t('country')}
                     />
                   </div>
                   {!hasCompleteAddress && (
                     <Button onClick={handleSaveAddress} className="w-full">
-                      Enregistrer l'adresse
+                      {commonT('save')} {t('address')}
                     </Button>
                   )}
                 </div>
@@ -274,13 +301,13 @@ export function DeliverySelector({
                       className="h-4 w-4 rounded border-gray-300"
                     />
                     <Label htmlFor="billingAddressDifferent" className="cursor-pointer">
-                      L'adresse de facturation est différente de l'adresse de livraison
+                      {t('billingAddressDifferent')}
                     </Label>
                   </div>
 
                   {/* Afficher l'adresse de facturation (toujours visible) */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Adresse de facturation</Label>
+                    <Label className="text-sm font-semibold">{t('billingAddress')}</Label>
                     {(() => {
                       // Déterminer quelle adresse afficher
                       const addressToShow = !delivery.billingAddressDifferent 
@@ -306,12 +333,12 @@ export function DeliverySelector({
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
                                 <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md space-y-1">
-                                  <p className="font-medium">{addressToShow.street || 'Non renseigné'}</p>
+                                  <p className="font-medium">{addressToShow.street || t('notProvided')}</p>
                                   <p>{addressToShow.postalCode || ''} {addressToShow.city || ''}</p>
                                   <p className="text-sm text-gray-600">{addressToShow.country || 'France'}</p>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-2">
-                                  Identique à l'adresse de livraison
+                                  {t('sameAsDelivery')}
                                 </p>
                               </div>
                               <Button
@@ -388,7 +415,7 @@ export function DeliverySelector({
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label>Rue</Label>
+                          <Label>{t('street')}</Label>
                           <Input
                             value={editedBillingAddress?.street || ''}
                             onChange={(e) =>
@@ -400,12 +427,12 @@ export function DeliverySelector({
                                 country: editedBillingAddress?.country || 'France',
                               })
                             }
-                            placeholder="Rue et numéro"
+                            placeholder={t('street')}
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label>Code postal</Label>
+                            <Label>{t('postalCode')}</Label>
                             <Input
                               value={editedBillingAddress?.postalCode || ''}
                               onChange={(e) =>
@@ -417,11 +444,11 @@ export function DeliverySelector({
                                   country: editedBillingAddress?.country || 'France',
                                 })
                               }
-                              placeholder="Code postal"
+                              placeholder={t('postalCode')}
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Ville</Label>
+                            <Label>{t('city')}</Label>
                             <Input
                               value={editedBillingAddress?.city || ''}
                               onChange={(e) =>
@@ -433,12 +460,12 @@ export function DeliverySelector({
                                   country: editedBillingAddress?.country || 'France',
                                 })
                               }
-                              placeholder="Ville"
+                              placeholder={t('city')}
                             />
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label>Pays</Label>
+                          <Label>{t('country')}</Label>
                           <Input
                             value={editedBillingAddress?.country || 'France'}
                             onChange={(e) =>
@@ -450,12 +477,12 @@ export function DeliverySelector({
                                 postalCode: editedBillingAddress?.postalCode || '',
                               })
                             }
-                            placeholder="Pays"
+                            placeholder={t('country')}
                           />
                         </div>
                         {!hasCompleteBillingAddress && (
                           <Button onClick={handleSaveBillingAddress} className="w-full">
-                            Enregistrer l'adresse de facturation
+                            {commonT('save')} {t('billingAddress')}
                           </Button>
                         )}
                       </div>
@@ -465,19 +492,62 @@ export function DeliverySelector({
                 </div>
               </div>
 
+              {/* Options d'emballage */}
+              <div className="pt-4 border-t space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="individualPackaging"
+                    checked={delivery.individualPackaging || false}
+                    onCheckedChange={(checked) => {
+                      onDeliveryChange({
+                        ...delivery,
+                        individualPackaging: checked === true,
+                      })
+                    }}
+                  />
+                  <Label
+                    htmlFor="individualPackaging"
+                    className="text-sm font-normal cursor-pointer flex-1"
+                  >
+                    {t('individualPackaging')}
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  {t('individualPackagingDescription')}
+                </p>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="newCarton"
+                    checked={delivery.newCarton || false}
+                    onCheckedChange={(checked) => {
+                      onDeliveryChange({
+                        ...delivery,
+                        newCarton: checked === true,
+                      })
+                    }}
+                  />
+                  <Label
+                    htmlFor="newCarton"
+                    className="text-sm font-normal cursor-pointer flex-1"
+                  >
+                    {t('newCarton')}
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  {t('newCartonDescription')}
+                </p>
+              </div>
+
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>8. Délai de livraison</CardTitle>
-          <CardDescription>Choisissez le délai souhaité</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <Card>
+          <CardContent className="pt-6">
           <div className="space-y-2">
-            <Label>Délai</Label>
+            <Label>{t('delay')}</Label>
             <Select
               value={delay.isExpress ? 'express' : `${delay.workingDays}`}
               onValueChange={(value) => {
@@ -509,7 +579,7 @@ export function DeliverySelector({
                   } else {
                     return (
                       <SelectItem key={`standard-${option.workingDays}-${index}`} value={`${option.workingDays}`}>
-                        {option.workingDays} jour{option.workingDays > 1 ? 's' : ''} ouvrable{option.workingDays > 1 ? 's' : ''}
+                        {option.workingDays} {t('workingDays')}
                       </SelectItem>
                     )
                   }
@@ -526,7 +596,7 @@ export function DeliverySelector({
                 <p className="font-medium">{formatDateShort(getIndicationDate())}</p>
               </div>
               <div>
-                <Label className="text-sm text-muted-foreground">Date de livraison estimée</Label>
+                <Label className="text-sm text-muted-foreground">{t('estimatedDeliveryDate')}</Label>
                 <p className="font-medium">{formatDateShort(getDeliveryDate(delay))}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {formatDate(getDeliveryDate(delay))}
@@ -540,9 +610,7 @@ export function DeliverySelector({
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Délai express :</strong> Ce délai est soumis à approbation en fonction du planning. 
-                Un supplément de {calculateExpressSurcharge(10, delay.expressDays || 1).toFixed(0)}% 
-                sera appliqué sur le marquage.
+                <strong>{t('express')} :</strong> {t('expressWarning', { surcharge: calculateExpressSurcharge(10, delay.expressDays || 1).toFixed(0) })}
               </AlertDescription>
             </Alert>
           )}
@@ -552,13 +620,13 @@ export function DeliverySelector({
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Délai réduit :</strong> Un supplément de {calculateExpressSurcharge(10, delay.workingDays).toFixed(0)}% 
-                sera appliqué sur le marquage pour ce délai de {delay.workingDays} jour{delay.workingDays > 1 ? 's' : ''} ouvrable{delay.workingDays > 1 ? 's' : ''}.
+                <strong>{t('reducedDelay')} :</strong> {t('reducedDelayWarning', { surcharge: calculateExpressSurcharge(10, delay.workingDays).toFixed(0), days: delay.workingDays })}
               </AlertDescription>
             </Alert>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }

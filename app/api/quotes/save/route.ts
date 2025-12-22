@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const {
+      title,
       selectedProducts,
       quoteItems,
       currentMarkings,
@@ -62,18 +63,21 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const quoteData = {
-      clientId: dbClient.id,
+    const baseQuoteData = {
+      title: title || null,
       status: 'draft',
-      step: currentStep || 'products',
+      step: currentStep || 'title',
       clientName: clientInfo?.name || client.name,
       clientEmail: clientInfo?.email || client.email,
       clientCompany: clientInfo?.company || client.company,
       clientPhone: clientInfo?.phone || client.phone,
       deliveryType: delivery?.type || 'livraison',
+      deliveryMethod: delivery?.method || null,
       deliveryAddress: delivery?.address || null,
       billingAddressDifferent: delivery?.billingAddressDifferent || false,
       billingAddress: delivery?.billingAddress || null,
+      individualPackaging: delivery?.individualPackaging || false,
+      newCarton: delivery?.newCarton || false,
       delayWorkingDays: delay?.workingDays || 10,
       delayType: delay?.type || 'standard',
       delayExpressDays: delay?.expressDays || null,
@@ -88,13 +92,25 @@ export async function POST(request: NextRequest) {
       // Mettre à jour le devis existant
       quote = await prisma.quote.update({
         where: { id: existingQuote.id },
-        data: quoteData,
+        data: {
+          ...baseQuoteData,
+          client: {
+            connect: { id: dbClient.id }
+          }
+        },
       })
+      console.log(`✅ Devis mis à jour: ${quote.id} - Titre: ${quote.title} - Statut: ${quote.status}`)
     } else {
       // Créer un nouveau devis
       quote = await prisma.quote.create({
-        data: quoteData,
+        data: {
+          ...baseQuoteData,
+          client: {
+            connect: { id: dbClient.id }
+          }
+        },
       })
+      console.log(`✅ Nouveau devis créé: ${quote.id} - Titre: ${quote.title} - Statut: ${quote.status}`)
     }
 
     return NextResponse.json({
@@ -103,6 +119,7 @@ export async function POST(request: NextRequest) {
         id: quote.id,
         status: quote.status,
         step: quote.step,
+        title: quote.title,
       },
     })
   } catch (error) {

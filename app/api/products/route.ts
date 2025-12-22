@@ -1,29 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getProductsFromOdoo } from '@/lib/odoo-products'
+import { getProductsFromDB, syncProductsFromOdoo } from '@/lib/products-db'
 import { sampleProducts } from '@/lib/data'
 
 export async function GET(request: NextRequest) {
   try {
+    const searchParams = request.nextUrl.searchParams
+    const forceSync = searchParams.get('sync') === 'true'
+    const forceRefresh = searchParams.get('refresh') === 'true'
+    
     // Vérifier si Odoo est configuré
     const odooUrl = process.env.NEXT_PUBLIC_ODOO_URL
     const useOdoo = odooUrl && odooUrl !== ''
     
     let products: any[] = []
-    let source = 'odoo'
+    let source = 'db'
     
     if (useOdoo) {
-      // Vérifier si on doit forcer le refresh (paramètre ?refresh=true)
-      const searchParams = request.nextUrl.searchParams
-      const forceRefresh = searchParams.get('refresh') === 'true'
+      // Synchroniser UNIQUEMENT si explicitement demandé
+      if (forceSync || forceRefresh) {
+        console.log('🔄 Synchronisation des produits depuis Odoo (demandée manuellement)...')
+        const syncResult = await syncProductsFromOdoo(forceRefresh || forceSync)
+        
+        if (!syncResult.success) {
+          console.warn('⚠️  Échec de la synchronisation, utilisation des produits de la DB')
+        } else {
+          console.log(`✅ ${syncResult.count} produit(s) synchronisé(s)`)
+          source = 'db-synced'
+        }
+      }
       
-      // Essayer de récupérer depuis Odoo (avec ou sans cache selon forceRefresh)
-      products = await getProductsFromOdoo(forceRefresh)
+      // Récupérer les produits depuis la base de données
+      products = await getProductsFromDB()
       
-      // Si aucun produit n'est retourné, utiliser les produits d'exemple
+      console.log(`📊 Produits récupérés depuis la DB: ${products.length}`)
+      
+      // Si aucun produit dans la DB, utiliser les produits d'exemple (pas de sync automatique)
       if (products.length === 0) {
-        console.warn('Aucun produit récupéré depuis Odoo, utilisation des produits d\'exemple')
+        console.warn('⚠️  Aucun produit dans la DB, utilisation des produits d\'exemple')
+        console.warn('   → Utilisez /api/products?sync=true pour synchroniser depuis Odoo')
         products = sampleProducts
         source = 'fallback'
+      } else {
+        console.log(`✅ ${products.length} produit(s) retourné(s) depuis la DB`)
       }
     } else {
       // Utiliser les produits d'exemple si Odoo n'est pas configuré
@@ -35,7 +53,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       products,
-      source, // Indique la source des produits (odoo, fallback, sample)
+      source, // Indique la source des produits (db, db-synced, fallback, sample)
       count: products.length,
     })
   } catch (error) {

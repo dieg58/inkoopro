@@ -155,10 +155,8 @@ async function findOdooProductByName(
   try {
     console.log(`🔍 Recherche du produit Odoo: "${productName}"`)
     
-    // Essayer d'abord une recherche exacte
-    let searchCriteria: any[] = [['name', '=', productName]]
-    
-    const searchProduct = async (criteria: any[]): Promise<any> => {
+    // Fonction pour chercher dans product.product
+    const searchProductProduct = async (criteria: any[]): Promise<any> => {
       const requestBody = {
         jsonrpc: '2.0',
         method: 'call',
@@ -174,9 +172,9 @@ async function findOdooProductByName(
             [criteria],
             {
               fields: includePrice 
-                ? ['id', 'name', 'uom_id', 'uom_po_id', 'taxes_id', 'list_price']
-                : ['id', 'name', 'uom_id', 'uom_po_id', 'taxes_id'],
-              limit: 10, // Augmenter la limite pour voir tous les résultats possibles
+                ? ['id', 'name', 'uom_id', 'uom_po_id', 'taxes_id', 'list_price', 'type', 'sale_ok']
+                : ['id', 'name', 'uom_id', 'uom_po_id', 'taxes_id', 'type', 'sale_ok'],
+              limit: 20,
             },
           ],
         },
@@ -193,42 +191,171 @@ async function findOdooProductByName(
       const data = await response.json()
 
       if (data.error) {
-        console.error(`❌ Erreur lors de la recherche du produit "${productName}":`, data.error)
-        return null
+        console.error(`❌ Erreur lors de la recherche dans product.product:`, data.error)
+        return []
+      }
+
+      return data.result || []
+    }
+    
+    // Fonction pour chercher dans product.template (si product.product ne trouve rien)
+    const searchProductTemplate = async (criteria: any[]): Promise<any> => {
+      const requestBody = {
+        jsonrpc: '2.0',
+        method: 'call',
+        params: {
+          service: 'object',
+          method: 'execute_kw',
+          args: [
+            ODOO_DB,
+            auth.uid,
+            auth.password,
+            'product.template',
+            'search_read',
+            [criteria],
+            {
+              fields: includePrice 
+                ? ['id', 'name', 'uom_id', 'uom_po_id', 'taxes_id', 'list_price', 'type', 'sale_ok', 'product_variant_ids']
+                : ['id', 'name', 'uom_id', 'uom_po_id', 'taxes_id', 'type', 'sale_ok', 'product_variant_ids'],
+              limit: 20,
+            },
+          ],
+        },
+      }
+
+      const response = await fetch(`${ODOO_URL}/jsonrpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        console.error(`❌ Erreur lors de la recherche dans product.template:`, data.error)
+        return []
       }
 
       return data.result || []
     }
 
-    // Essayer recherche exacte
-    let products = await searchProduct([['name', '=', productName]])
+    // Essayer recherche exacte dans product.product (avec filtre sale_ok = True)
+    console.log(`   🔎 Recherche exacte dans product.product: name = "${productName}"`)
+    let products = await searchProductProduct([['name', '=', productName], ['sale_ok', '=', true]])
     
-    // Si pas de résultat, essayer recherche insensible à la casse
+    // Si pas de résultat, essayer sans filtre sale_ok
     if (!products || products.length === 0) {
-      console.log(`   ⚠️ Recherche exacte échouée, tentative avec recherche insensible à la casse...`)
-      products = await searchProduct([['name', 'ilike', productName]])
+      console.log(`   ⚠️ Recherche avec sale_ok échouée, tentative sans filtre...`)
+      products = await searchProductProduct([['name', '=', productName]])
     }
     
-    // Si toujours pas de résultat, essayer recherche partielle
+    // Si pas de résultat, essayer recherche insensible à la casse dans product.product
     if (!products || products.length === 0) {
-      console.log(`   ⚠️ Recherche insensible à la casse échouée, tentative avec recherche partielle...`)
-      products = await searchProduct([['name', 'like', productName]])
+      console.log(`   ⚠️ Recherche exacte échouée, tentative avec recherche insensible à la casse dans product.product...`)
+      products = await searchProductProduct([['name', 'ilike', productName], ['sale_ok', '=', true]])
+      if (!products || products.length === 0) {
+        products = await searchProductProduct([['name', 'ilike', productName]])
+      }
+    }
+    
+    // Si toujours pas de résultat, essayer recherche partielle dans product.product
+    if (!products || products.length === 0) {
+      console.log(`   ⚠️ Recherche insensible à la casse échouée, tentative avec recherche partielle dans product.product...`)
+      products = await searchProductProduct([['name', 'like', productName], ['sale_ok', '=', true]])
+      if (!products || products.length === 0) {
+        products = await searchProductProduct([['name', 'like', productName]])
+      }
+    }
+    
+    // Si toujours pas de résultat, essayer dans product.template
+    if (!products || products.length === 0) {
+      console.log(`   ⚠️ Aucun résultat dans product.product, tentative dans product.template...`)
+      let templates = await searchProductTemplate([['name', '=', productName], ['sale_ok', '=', true]])
+      
+      if (!templates || templates.length === 0) {
+        templates = await searchProductTemplate([['name', '=', productName]])
+      }
+      
+      if (!templates || templates.length === 0) {
+        templates = await searchProductTemplate([['name', 'ilike', productName], ['sale_ok', '=', true]])
+      }
+      
+      if (!templates || templates.length === 0) {
+        templates = await searchProductTemplate([['name', 'ilike', productName]])
+      }
+      
+      if (!templates || templates.length === 0) {
+        templates = await searchProductTemplate([['name', 'like', productName], ['sale_ok', '=', true]])
+      }
+      
+      if (!templates || templates.length === 0) {
+        templates = await searchProductTemplate([['name', 'like', productName]])
+      }
+      
+      // Si on trouve un template, récupérer la première variante (product.product)
+      if (templates && templates.length > 0) {
+        const template = templates[0]
+        console.log(`   ✅ Template trouvé: "${template.name}" (ID: ${template.id}, Type: ${template.type || 'N/A'})`)
+        if (template.product_variant_ids && template.product_variant_ids.length > 0) {
+          const variantId = template.product_variant_ids[0]
+          console.log(`   🔎 Récupération de la variante product.product ID: ${variantId}`)
+          // Récupérer les détails de la variante
+          const variantProducts = await searchProductProduct([['id', '=', variantId]])
+          if (variantProducts && variantProducts.length > 0) {
+            products = variantProducts
+            console.log(`   ✅ Variante trouvée: "${variantProducts[0].name}" (Type: ${variantProducts[0].type || 'N/A'})`)
+          }
+        } else {
+          // Si pas de variante, utiliser directement le template (pour les services sans variantes)
+          console.log(`   ⚠️ Pas de variante, utilisation directe du template`)
+          // Convertir le template en format product.product
+          products = [{
+            id: template.id,
+            name: template.name,
+            type: template.type,
+            sale_ok: template.sale_ok,
+            uom_id: template.uom_id,
+            uom_po_id: template.uom_po_id,
+            taxes_id: template.taxes_id,
+            list_price: template.list_price,
+          }]
+        }
+      }
     }
 
     // Afficher tous les produits trouvés pour déboguer
     if (products && products.length > 0) {
       console.log(`   📦 ${products.length} produit(s) trouvé(s):`)
       products.forEach((p: any, idx: number) => {
-        console.log(`      ${idx + 1}. "${p.name}" (ID: ${p.id})`)
+        console.log(`      ${idx + 1}. "${p.name}" (ID: ${p.id}, Type: ${p.type || 'N/A'}, Sale OK: ${p.sale_ok || false})`)
       })
       
-      // Prendre le premier produit qui correspond exactement (insensible à la casse)
-      let product = products.find((p: any) => p.name.toLowerCase() === productName.toLowerCase())
+      // Filtrer pour ne garder que les produits de type "service"
+      const serviceProducts = products.filter((p: any) => p.type === 'service')
+      if (serviceProducts.length > 0) {
+        console.log(`   ✅ ${serviceProducts.length} produit(s) de type "service" trouvé(s)`)
+      } else {
+        console.warn(`   ⚠️ Aucun produit de type "service" trouvé parmi les résultats`)
+        console.warn(`   → Les produits trouvés sont de type: ${[...new Set(products.map((p: any) => p.type || 'N/A'))].join(', ')}`)
+      }
       
-      // Si pas de correspondance exacte, prendre le premier
+      // Prendre le premier produit de type "service" qui correspond exactement (insensible à la casse)
+      let product = serviceProducts.length > 0 
+        ? serviceProducts.find((p: any) => p.name.toLowerCase() === productName.toLowerCase())
+        : null
+      
+      // Si pas de correspondance exacte dans les services, prendre le premier service
+      if (!product && serviceProducts.length > 0) {
+        product = serviceProducts[0]
+        console.log(`   ⚠️ Aucune correspondance exacte, utilisation du premier service: "${product.name}"`)
+      }
+      
+      // Si toujours pas de produit service, prendre le premier produit (avec avertissement)
       if (!product && products.length > 0) {
         product = products[0]
-        console.log(`   ⚠️ Aucune correspondance exacte, utilisation du premier résultat: "${product.name}"`)
+        console.warn(`   ⚠️ Aucun produit de type "service" trouvé, utilisation du premier résultat: "${product.name}" (Type: ${product.type || 'N/A'})`)
       }
       
       if (product) {
@@ -549,6 +676,13 @@ export async function createQuoteInOdoo(
     
     console.log('✅ Authentification réussie, UID:', auth.uid)
 
+    // Charger la configuration des prix pour obtenir la remise textile
+    const { loadPricingConfig } = await import('./pricing-config-db')
+    const pricingConfig = await loadPricingConfig()
+    const textileDiscountPercentage = pricingConfig.textileDiscountPercentage || 0
+    
+    console.log(`💰 Remise textile configurée: ${textileDiscountPercentage}%`)
+
     // Préparer les lignes de commande
     const orderLines: any[] = []
     const allFiles: Array<{ name: string; marking: string }> = [] // Collecter tous les fichiers pour les notes
@@ -604,8 +738,14 @@ export async function createQuoteInOdoo(
                 textileLineData.price_unit = textileVariant.list_price
               }
 
+              // Ajouter la remise textile si configurée
+              if (textileDiscountPercentage > 0) {
+                textileLineData.discount = textileDiscountPercentage
+                console.log(`   💰 Remise textile appliquée: ${textileDiscountPercentage}%`)
+              }
+
               orderLines.push([0, 0, textileLineData])
-              console.log(`✅ Ligne produit textile créée: ${item.product.name} - ${colorQuantity.color} - ${sizeQuantity.size} (ID: ${textileVariant.id})`)
+              console.log(`✅ Ligne produit textile créée: ${item.product.name} - ${colorQuantity.color} - ${sizeQuantity.size} (ID: ${textileVariant.id}${textileDiscountPercentage > 0 ? `, Remise: ${textileDiscountPercentage}%` : ''})`)
             } else {
               console.warn(`⚠️ Variante textile "${item.product.name}" - ${colorQuantity.color} - ${sizeQuantity.size} non trouvée dans Odoo`)
               // Créer une ligne de note si le produit n'existe pas
@@ -635,10 +775,18 @@ export async function createQuoteInOdoo(
         // Rechercher le produit service Odoo
         let odooServiceInfo: OdooProductInfo | null = null
         if (odooProductName) {
-          odooServiceInfo = await findOdooProductByName(odooProductName, auth, item.clientProvided)
+          odooServiceInfo = await findOdooProductByName(odooProductName, auth, true) // includePrice = true pour avoir le prix
           if (!odooServiceInfo) {
-            console.warn(`⚠️ Produit service Odoo "${odooProductName}" non trouvé - ligne de note uniquement`)
+            console.error(`❌ Produit service Odoo "${odooProductName}" non trouvé dans Odoo`)
+            console.error(`   → Vérifiez que le produit existe dans Odoo avec le nom exact: "${odooProductName}"`)
+            console.error(`   → Vérifiez le mapping dans l'interface admin (Techniques > Mapping Odoo)`)
+            // On continue quand même pour créer une ligne de note, mais on log l'erreur
+          } else {
+            console.log(`✅ Produit service Odoo trouvé: "${odooProductName}" (ID: ${odooServiceInfo.id})`)
           }
+        } else {
+          console.error(`❌ Aucun mapping configuré pour la technique "${item.technique}"`)
+          console.error(`   → Configurez le mapping dans l'interface admin (Techniques > Mapping Odoo)`)
         }
 
         // Construire la description détaillée avec toutes les informations
@@ -747,6 +895,11 @@ export async function createQuoteInOdoo(
       partner_id: partnerId, // ID du client connecté
       order_line: orderLines,
       note: note,
+    }
+    
+    // Ajouter le titre comme client_order_ref (référence client) si présent
+    if (quote.title) {
+      saleOrderData.client_order_ref = quote.title
     }
     
     // Ne pas inclure state dans create, Odoo le définit automatiquement

@@ -12,11 +12,26 @@ export interface ServiceOdooMapping {
 export async function loadServiceOdooMapping(): Promise<ServiceOdooMapping[]> {
   try {
     const mappings = await prisma.serviceOdooMapping.findMany()
-    return mappings.map(m => ({
+    const result = mappings.map(m => ({
       technique: m.technique as 'serigraphie' | 'broderie' | 'dtf',
       odooProductName: m.odooProductName,
       textileType: m.textileType as 'clair' | 'fonce' | undefined,
     }))
+    
+    // Si aucun mapping, initialiser avec les valeurs par défaut
+    if (result.length === 0) {
+      console.log('📝 Aucun mapping trouvé, initialisation avec les valeurs par défaut...')
+      await initializeDefaultMappings()
+      // Recharger après initialisation
+      const newMappings = await prisma.serviceOdooMapping.findMany()
+      return newMappings.map(m => ({
+        technique: m.technique as 'serigraphie' | 'broderie' | 'dtf',
+        odooProductName: m.odooProductName,
+        textileType: m.textileType as 'clair' | 'fonce' | undefined,
+      }))
+    }
+    
+    return result
   } catch (error) {
     console.error('Erreur lors du chargement du mapping services Odoo:', error)
     return []
@@ -70,21 +85,39 @@ export async function getOdooProductNameForTechnique(
 ): Promise<string | null> {
   try {
     const mappings = await loadServiceOdooMapping()
+    console.log(`📋 Mappings disponibles:`, mappings.map(m => ({
+      technique: m.technique,
+      textileType: m.textileType,
+      odooProductName: m.odooProductName
+    })))
     
     if (technique === 'serigraphie') {
       // Pour sérigraphie, on cherche selon textileType
       const textileType = techniqueOptions?.textileType || 'clair'
+      console.log(`   🔍 Recherche mapping sérigraphie avec textileType="${textileType}"`)
       const mapping = mappings.find(
         m => m.technique === 'serigraphie' && m.textileType === textileType
       )
+      if (mapping) {
+        console.log(`   ✅ Mapping trouvé: "${mapping.odooProductName}"`)
+      } else {
+        console.warn(`   ⚠️ Aucun mapping trouvé pour sérigraphie textileType="${textileType}"`)
+        console.warn(`   → Mappings disponibles:`, mappings.filter(m => m.technique === 'serigraphie'))
+      }
       return mapping?.odooProductName || null
     } else {
       // Pour broderie et dtf, on cherche directement
+      console.log(`   🔍 Recherche mapping pour technique="${technique}"`)
       const mapping = mappings.find(m => m.technique === technique)
+      if (mapping) {
+        console.log(`   ✅ Mapping trouvé: "${mapping.odooProductName}"`)
+      } else {
+        console.warn(`   ⚠️ Aucun mapping trouvé pour technique="${technique}"`)
+      }
       return mapping?.odooProductName || null
     }
   } catch (error) {
-    console.error('Erreur lors de la récupération du nom produit Odoo:', error)
+    console.error('❌ Erreur lors de la récupération du nom produit Odoo:', error)
     return null
   }
 }

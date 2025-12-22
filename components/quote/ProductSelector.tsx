@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { Product, ColorQuantities, ProductSize, ProductColor, SelectedProduct } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Trash2, Search } from 'lucide-react'
+import { Plus, Trash2, Search, Edit2 } from 'lucide-react'
 import { TEXTILE_DISCOUNT_PERCENTAGE } from '@/lib/data'
 
 interface ProductSelectorProps {
@@ -18,6 +19,8 @@ interface ProductSelectorProps {
 
 export function ProductSelector({ selectedProducts, onProductsChange, onContinue }: ProductSelectorProps) {
   const { toast } = useToast()
+  const t = useTranslations('quote')
+  const commonT = useTranslations('common')
   const [products, setProducts] = useState<Product[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -30,9 +33,13 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
   const [isColorFilterOpen, setIsColorFilterOpen] = useState(false) // État du menu déroulant des couleurs
   const [colorSearchQuery, setColorSearchQuery] = useState('') // Recherche dans le filtre de couleurs
   const [showBlankForm, setShowBlankForm] = useState(false) // Afficher le formulaire de blank personnalisé
+  const [blankReference, setBlankReference] = useState<string>('') // Référence du blank
+  const [blankName, setBlankName] = useState<string>('') // Nom du produit blank
+  const [blankClientProvided, setBlankClientProvided] = useState(false) // Le client fournit-il le blank ?
   const [blankColors, setBlankColors] = useState<string[]>(['Blanc']) // Couleurs du blank
   const [blankSizes, setBlankSizes] = useState<ProductSize[]>(['S', 'M', 'L', 'XL']) // Tailles du blank
   const [blankColorQuantities, setBlankColorQuantities] = useState<ColorQuantities[]>([]) // Quantités du blank
+  const [editingProductId, setEditingProductId] = useState<string | null>(null) // ID du produit en cours d'édition
 
   // Charger les produits depuis l'API
   useEffect(() => {
@@ -79,14 +86,63 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
   }
 
   // Filtrer les produits selon la recherche (si vide, afficher tous les produits)
+  // Recherche par nom, référence produit (defaultCode), référence fournisseur (supplierReference) ou description
   const filteredProducts = searchQuery.trim() === ''
     ? products
-    : products.filter(product =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    : products.filter(product => {
+        const query = searchQuery.toLowerCase().trim()
+        
+        // Recherche dans le nom
+        const nameMatch = product.name.toLowerCase().includes(query)
+        
+        // Recherche dans la référence produit (defaultCode)
+        const defaultCodeMatch = product.defaultCode 
+          ? product.defaultCode.toLowerCase().includes(query)
+          : false
+        
+        // Recherche dans la référence fournisseur (supplierReference)
+        const supplierRefMatch = product.supplierReference 
+          ? product.supplierReference.toLowerCase().includes(query)
+          : false
+        
+        // Recherche dans la description
+        const descriptionMatch = product.description 
+          ? product.description.toLowerCase().includes(query)
+          : false
+        
+        // Recherche combinée : nom + référence (pour "Men's Bio150 IC T-shirt K3025")
+        const combinedMatch = product.name.toLowerCase().includes(query) || 
+          (product.defaultCode && product.name.toLowerCase().includes(query.split(' ')[0]) && product.defaultCode.toLowerCase().includes(query.split(' ').pop() || ''))
+        
+        const matches = nameMatch || defaultCodeMatch || supplierRefMatch || descriptionMatch || combinedMatch
+        
+        // Log pour déboguer (uniquement pour les recherches spécifiques)
+        if (query.includes('k3025') || query.includes('bio150')) {
+          console.log('🔍 Recherche produit:', {
+            name: product.name,
+            defaultCode: product.defaultCode,
+            supplierReference: product.supplierReference,
+            query,
+            nameMatch,
+            defaultCodeMatch,
+            supplierRefMatch,
+            descriptionMatch,
+            combinedMatch,
+            matches
+          })
+        }
+        
+        return matches
+      })
 
   const handleProductSelect = (productId: string) => {
+    // Si c'est l'option "blank", initialiser le formulaire blank
+    if (productId === 'blank-custom') {
+      initializeBlankForm()
+      setIsDropdownOpen(false)
+      return
+    }
+    
     const product = products.find(p => p.id === productId)
     if (product) {
       setSelectedProduct(product)
@@ -116,9 +172,13 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
     setSelectedProduct(null)
     setSearchQuery('')
     setIsDropdownOpen(false)
+    setBlankReference('') // Réinitialiser la référence
+    setBlankName('') // Réinitialiser le nom
+    setBlankClientProvided(false) // Par défaut, INKOO fournit
     // Initialiser avec des valeurs par défaut
     const defaultSizes: ProductSize[] = ['S', 'M', 'L', 'XL', '2XL']
-    const defaultColors = ['Blanc']
+    // Couleurs communes de base
+    const defaultColors = ['Blanc', 'Noir', 'Gris', 'Bleu', 'Rouge', 'Vert']
     setBlankSizes(defaultSizes)
     setBlankColors(defaultColors)
     // Initialiser les quantités
@@ -193,6 +253,16 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
 
   // Ajouter le blank personnalisé
   const handleAddBlank = () => {
+    // Vérifier que le nom est renseigné
+    if (!blankName.trim()) {
+      toast({
+        title: commonT('error'),
+        description: t('productNameRequired'),
+        variant: 'destructive',
+      })
+      return
+    }
+
     // Vérifier qu'il y a au moins une quantité > 0
     const hasQuantities = blankColorQuantities.some(cq =>
       cq.quantities.some(q => q.quantity > 0)
@@ -200,38 +270,58 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
     
     if (!hasQuantities) {
       toast({
-        title: 'Erreur',
-        description: 'Veuillez indiquer au moins une quantité',
+        title: commonT('error'),
+        description: t('quantityRequired'),
         variant: 'destructive',
       })
       return
     }
 
+
     // Créer un produit virtuel "blank"
+    const productName = blankName.trim() || t('customBlank')
     const blankProduct: Product = {
       id: `blank-${Date.now()}`,
-      name: 'Blank personnalisé (fourni par le client)',
-      description: 'Textile personnalisé fourni par le client',
+      name: productName,
+      description: t('customTextile'),
+      defaultCode: blankReference.trim() || undefined, // Référence du blank
       availableSizes: blankSizes,
       availableColors: blankColors,
-      basePrice: 0, // Toujours 0 car fourni par le client
+      basePrice: blankClientProvided ? 0 : undefined, // Prix à définir dans Odoo si INKOO fournit
     }
 
-    const newProduct: SelectedProduct = {
-      id: Date.now().toString(),
+    const updatedBlankProduct: SelectedProduct = {
+      id: editingProductId || Date.now().toString(),
       product: blankProduct,
-      clientProvided: true, // Toujours true pour les blanks
+      clientProvided: blankClientProvided, // Selon le choix du client
       colorQuantities: blankColorQuantities.filter(cq =>
         cq.quantities.some(q => q.quantity > 0)
       ),
     }
-    onProductsChange([...selectedProducts, newProduct])
+
+    if (editingProductId) {
+      // Mettre à jour le produit existant
+      onProductsChange(selectedProducts.map(p => 
+        p.id === editingProductId ? updatedBlankProduct : p
+      ))
+      toast({
+        title: t('productModified'),
+        description: t('productModifiedDescription'),
+      })
+    } else {
+      // Ajouter un nouveau produit
+      onProductsChange([...selectedProducts, updatedBlankProduct])
+    }
 
     // Reset
     setShowBlankForm(false)
-    setBlankColors(['Blanc'])
+    setBlankReference('')
+    setBlankName('')
+    setBlankClientProvided(false)
+    setBlankColors(['Blanc', 'Noir', 'Gris', 'Bleu', 'Rouge', 'Vert'])
     setBlankSizes(['S', 'M', 'L', 'XL'])
     setBlankColorQuantities([])
+    setEditingProductId(null)
   }
 
   // Toggle une couleur dans le filtre
@@ -276,22 +366,35 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
     
     if (!hasQuantities) {
       toast({
-        title: 'Erreur',
-        description: 'Veuillez indiquer au moins une quantité',
+        title: commonT('error'),
+        description: t('quantityRequired'),
         variant: 'destructive',
       })
       return
     }
 
-    const newProduct: SelectedProduct = {
-      id: Date.now().toString(),
+    const updatedProduct: SelectedProduct = {
+      id: editingProductId || Date.now().toString(),
       product: selectedProduct,
       clientProvided: clientProvided,
       colorQuantities: colorQuantities.filter(cq =>
         cq.quantities.some(q => q.quantity > 0)
       ),
     }
-    onProductsChange([...selectedProducts, newProduct])
+
+    if (editingProductId) {
+      // Mettre à jour le produit existant
+      onProductsChange(selectedProducts.map(p => 
+        p.id === editingProductId ? updatedProduct : p
+      ))
+      toast({
+        title: 'Produit modifié',
+        description: 'Le produit a été modifié avec succès',
+      })
+    } else {
+      // Ajouter un nouveau produit
+      onProductsChange([...selectedProducts, updatedProduct])
+    }
 
     // Reset
     setSelectedProduct(null)
@@ -302,6 +405,84 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
     setSelectedColorsFilter([])
     setColorSearchQuery('')
     setIsColorFilterOpen(false)
+    setEditingProductId(null)
+  }
+
+  const handleEditProduct = (productId: string) => {
+    const productToEdit = selectedProducts.find(p => p.id === productId)
+    if (!productToEdit) return
+
+    // Vérifier si c'est un produit "blank" personnalisé (commence par "blank-" ou a une description "Textile personnalisé")
+    const isBlankProduct = productToEdit.product.id.startsWith('blank-') || 
+                          productToEdit.product.description === t('customTextile')
+
+    if (isBlankProduct) {
+      // Charger dans le formulaire blank
+      setShowBlankForm(true)
+      setBlankName(productToEdit.product.name)
+      setBlankReference(productToEdit.product.defaultCode || '')
+      setBlankClientProvided(productToEdit.clientProvided)
+      setBlankColors(productToEdit.product.availableColors)
+      setBlankSizes(productToEdit.product.availableSizes as ProductSize[])
+      setBlankColorQuantities(productToEdit.colorQuantities)
+      setEditingProductId(productId)
+      
+      // Scroll vers le formulaire blank
+      setTimeout(() => {
+        const formElement = document.getElementById('blank-form')
+        if (formElement) {
+          formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 100)
+    } else {
+      // Charger les données du produit dans le formulaire standard
+      setSelectedProduct(productToEdit.product)
+      setClientProvided(productToEdit.clientProvided)
+      setEditingProductId(productId)
+      
+      // Initialiser les colorQuantities avec les données existantes
+      const existingColors: ColorQuantities[] = productToEdit.product.availableColors.map(color => {
+        const existingCq = productToEdit.colorQuantities.find(cq => cq.color === color)
+        if (existingCq) {
+          return existingCq
+        }
+        // Si la couleur n'existe pas encore, créer une entrée vide
+        return {
+          color,
+          quantities: productToEdit.product.availableSizes.map(size => ({
+            size: size as ProductSize,
+            quantity: 0,
+          })),
+        }
+      })
+      setColorQuantities(existingColors)
+      
+      // Initialiser le filtre avec toutes les couleurs
+      setSelectedColorsFilter(productToEdit.product.availableColors)
+      
+      // Afficher le nom du produit dans la recherche
+      setSearchQuery(productToEdit.product.name)
+      
+      // Scroll vers le formulaire
+      setTimeout(() => {
+        const formElement = document.getElementById('product-form')
+        if (formElement) {
+          formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 100)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setSelectedProduct(null)
+    setColorQuantities([])
+    setClientProvided(false)
+    setSearchQuery('')
+    setIsDropdownOpen(false)
+    setSelectedColorsFilter([])
+    setColorSearchQuery('')
+    setIsColorFilterOpen(false)
+    setEditingProductId(null)
   }
 
   const removeSelectedProduct = (id: string) => {
@@ -337,6 +518,19 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
     }
     loadConfig()
   }, [])
+
+  // Fonction pour calculer le prix avec réduction textile
+  const getPriceWithDiscount = (basePrice: number | undefined): number | null => {
+    if (!basePrice) return null
+    
+    // Appliquer la réduction sur le textile si configurée
+    if (pricingConfig.textileDiscountPercentage > 0) {
+      const discount = (basePrice * pricingConfig.textileDiscountPercentage) / 100
+      return basePrice - discount
+    }
+    
+    return basePrice
+  }
 
   // Fonction pour obtenir le prix d'une variante (couleur + taille)
   const getVariantPrice = (color: string, size: ProductSize): number | null => {
@@ -386,12 +580,18 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card id="product-form">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>1. Sélectionnez vos produits</CardTitle>
-              <CardDescription>Choisissez un ou plusieurs produits avec leurs tailles et quantités</CardDescription>
+              <CardTitle>
+                {editingProductId ? t('editProduct') : t('stepProducts')}
+              </CardTitle>
+              <CardDescription>
+                {editingProductId 
+                  ? 'Modifiez les couleurs et quantités du produit'
+                  : 'Choisissez un ou plusieurs produits avec leurs tailles et quantités'}
+              </CardDescription>
             </div>
             {productsSource === 'odoo' && (
               <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
@@ -401,49 +601,80 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Option pour ajouter un blank personnalisé */}
-          {!showBlankForm && (
-            <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-              <div>
-                <Label className="font-semibold">Blank personnalisé</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Ajoutez un textile personnalisé (hors Stanley/Toptex) que vous fournissez
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={initializeBlankForm}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un blank
-              </Button>
-            </div>
-          )}
-
           {/* Formulaire pour le blank personnalisé */}
           {showBlankForm && (
-            <Card className="border-2 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+            <Card id="blank-form" className="border-2 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-lg">Blank personnalisé</CardTitle>
-                    <CardDescription>Textile fourni par le client (hors Stanley/Toptex)</CardDescription>
+                    <CardTitle className="text-lg">
+                      {editingProductId ? t('editCustomProduct') : t('customProduct')}
+                    </CardTitle>
+                    <CardDescription>
+                      {editingProductId 
+                        ? 'Modifiez les informations du produit personnalisé'
+                        : "Ajoutez un produit qui n'est pas dans notre catalogue"}
+                    </CardDescription>
                   </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setShowBlankForm(false)
-                      setBlankColorQuantities([])
-                    }}
+                    onClick={handleCancelEdit}
                   >
                     Annuler
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Nom du produit */}
+                <div className="space-y-2">
+                  <Label htmlFor="blank-name">{t('customProductName')} *</Label>
+                  <Input
+                    id="blank-name"
+                    placeholder="Ex: T-shirt personnalisé, Sweat capuche, etc."
+                    value={blankName}
+                    onChange={(e) => setBlankName(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Indiquez le nom du produit personnalisé
+                  </p>
+                </div>
+
+                {/* Référence du produit */}
+                <div className="space-y-2">
+                  <Label htmlFor="blank-reference">{t('customProductReference')}</Label>
+                  <Input
+                    id="blank-reference"
+                    placeholder="Ex: REF-12345, K3025, etc."
+                    value={blankReference}
+                    onChange={(e) => setBlankReference(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Référence du produit (optionnel)
+                  </p>
+                </div>
+
+                {/* Checkbox "Fourni par le client" */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="blank-client-provided"
+                    checked={blankClientProvided}
+                    onChange={(e) => setBlankClientProvided(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="blank-client-provided" className="cursor-pointer">
+                    Je fournis ce produit
+                  </Label>
+                </div>
+                {!blankClientProvided && (
+                  <p className="text-xs text-muted-foreground">
+                    Le prix sera défini dans Odoo par la suite
+                  </p>
+                )}
+
                 {/* Gestion des couleurs */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -477,6 +708,9 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Couleurs communes pré-sélectionnées. Vous pouvez en ajouter ou supprimer selon vos besoins.
+                  </p>
                 </div>
 
                 {/* Gestion des tailles */}
@@ -544,6 +778,7 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
                                           parseInt(e.target.value) || 0
                                         )
                                       }
+                                      onWheel={(e) => e.currentTarget.blur()}
                                       placeholder="0"
                                       className="w-full text-center h-9"
                                     />
@@ -563,14 +798,25 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
                   </div>
                 )}
 
-                <Button
-                  onClick={handleAddBlank}
-                  disabled={getTotalQuantity(blankColorQuantities) === 0}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter ce blank
-                </Button>
+                <div className="flex gap-2">
+                  {editingProductId && (
+                    <Button 
+                      onClick={handleCancelEdit} 
+                      variant="outline" 
+                      className="flex-1"
+                    >
+                      Annuler
+                    </Button>
+                  )}
+                  <Button
+                    onClick={handleAddBlank}
+                    disabled={getTotalQuantity(blankColorQuantities) === 0 || !blankName.trim()}
+                    className={editingProductId ? "flex-1" : "w-full"}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {editingProductId ? 'Enregistrer les modifications' : 'Ajouter ce produit'}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -608,6 +854,21 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
                     </div>
                   ) : (
                     <div className="p-1">
+                      {/* Option "Blank personnalisé" en premier */}
+                      <button
+                        onClick={() => handleProductSelect('blank-custom')}
+                        className="w-full text-left px-3 py-2 rounded-sm text-sm transition-colors hover:bg-accent hover:text-accent-foreground border-b border-border"
+                      >
+                        <div className="font-medium flex items-center gap-2">
+                          <Plus className="h-4 w-4" />
+                          Produit personnalisé
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Ajoutez un produit qui n'est pas dans notre catalogue
+                        </div>
+                      </button>
+                      
+                      {/* Liste des produits */}
                       {filteredProducts.map(product => (
                         <button
                           key={product.id}
@@ -618,15 +879,21 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
                               : ''
                           }`}
                         >
-                          <div className="font-medium">{product.name}</div>
-                          {product.description && (
-                            <div className="text-xs text-muted-foreground mt-0.5">{product.description}</div>
-                          )}
-                          {product.basePrice && (
-                            <div className="text-xs text-blue-600 mt-0.5">
-                              À partir de {product.basePrice.toFixed(2)} €
-                            </div>
-                          )}
+                          <div className="font-medium">
+                            {(() => {
+                              // Afficher la référence fournisseur en priorité, sinon la référence produit
+                              const ref = product.supplierReference || product.defaultCode
+                              return ref ? `[${ref}] ${product.name}` : product.name
+                            })()}
+                          </div>
+                          {(() => {
+                            const discountedPrice = getPriceWithDiscount(product.basePrice)
+                            return discountedPrice !== null ? (
+                              <div className="text-xs text-blue-600 mt-0.5">
+                                À partir de {discountedPrice.toFixed(2)} €
+                              </div>
+                            ) : null
+                          })()}
                         </button>
                       ))}
                     </div>
@@ -652,36 +919,12 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
             </div>
           )}
 
-          {/* Option pour ajouter un blank si le produit n'est pas Stanley/Toptex */}
-          {selectedProduct && !isStanleyOrToptex(selectedProduct) && !showBlankForm && (
-            <div className="p-3 border rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border-blue-200">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <Label className="font-semibold text-sm">Blank personnalisé disponible</Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Ce produit n'est pas Stanley ou Toptex. Vous pouvez ajouter un blank personnalisé que vous fournissez.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={initializeBlankForm}
-                  className="ml-2"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Ajouter un blank
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Configuration des quantités (toujours demandée, même si le client fournit) */}
           {selectedProduct && colorQuantities.length > 0 && (
             <>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label>Couleurs et quantités par taille</Label>
+                  <Label>{t('colors')} {commonT('and')} {t('quantities')} {t('bySize')}</Label>
                 </div>
                 
                 {/* Filtre des couleurs - Menu déroulant */}
@@ -826,6 +1069,7 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
                                             parseInt(e.target.value) || 0
                                           )
                                         }
+                                        onWheel={(e) => e.currentTarget.blur()}
                                         placeholder="0"
                                         className="w-full text-center h-9"
                                       />
@@ -847,22 +1091,33 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
 
               <div className="pt-4 border-t">
                 <p className="text-sm font-medium">
-                  Total: {getTotalQuantity(colorQuantities)} pièce(s)
+                  {t('totalPieces', { count: getTotalQuantity(colorQuantities) })}
                 </p>
               </div>
             </>
           )}
 
-          {/* Bouton pour ajouter le produit */}
+          {/* Bouton pour ajouter/modifier le produit */}
           {selectedProduct && (
-            <Button
-              onClick={handleAddProduct}
-              disabled={getTotalQuantity(colorQuantities) === 0}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter ce produit
-            </Button>
+            <div className="flex gap-2">
+              {editingProductId && (
+                <Button 
+                  onClick={handleCancelEdit} 
+                  variant="outline" 
+                  className="flex-1"
+                >
+                  Annuler
+                </Button>
+              )}
+              <Button
+                onClick={handleAddProduct}
+                disabled={getTotalQuantity(colorQuantities) === 0}
+                className={editingProductId ? "flex-1" : "w-full"}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {editingProductId ? t('saveChanges') : t('addProduct')}
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -871,15 +1126,21 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
       {selectedProducts.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Produits sélectionnés ({selectedProducts.length})</CardTitle>
-            <CardDescription>Vous pouvez ajouter plusieurs produits avant de passer à la personnalisation</CardDescription>
+            <CardTitle>{t('selectedProducts')} ({selectedProducts.length})</CardTitle>
+            <CardDescription>{t('selectProductsDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {selectedProducts.map((selectedProduct) => (
               <div key={selectedProduct.id} className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h4 className="font-semibold">{selectedProduct.product.name}</h4>
+                    <h4 className="font-semibold">
+                      {(() => {
+                        // Afficher la référence si disponible
+                        const ref = selectedProduct.product.defaultCode || selectedProduct.product.supplierReference
+                        return ref ? `[${ref}] ${selectedProduct.product.name}` : selectedProduct.product.name
+                      })()}
+                    </h4>
                     {selectedProduct.clientProvided ? (
                       <p className="text-sm text-muted-foreground">Fourni par le client</p>
                     ) : (
@@ -893,18 +1154,29 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
                           </span>
                         ))}
                         <p className="mt-1 font-medium">
-                          Total: {getTotalQuantity(selectedProduct.colorQuantities)} pièce(s)
+                          {t('quote.totalPieces', { count: getTotalQuantity(selectedProduct.colorQuantities) })}
                         </p>
                       </div>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeSelectedProduct(selectedProduct.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditProduct(selectedProduct.id)}
+                      title={t('editProduct')}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeSelectedProduct(selectedProduct.id)}
+                      title="Supprimer le produit"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

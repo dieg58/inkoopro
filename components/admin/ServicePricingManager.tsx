@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { ServicePricing, SerigraphiePricing, BroderiePricing, DTFPricing } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,8 @@ import { Save, Plus, Trash2 } from 'lucide-react'
 
 export function ServicePricingManager() {
   const { toast } = useToast()
+  const t = useTranslations('admin.pricing')
+  const commonT = useTranslations('common')
   const [pricing, setPricing] = useState<ServicePricing[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -71,16 +74,61 @@ export function ServicePricingManager() {
   const updatePrice = (
     technique: 'serigraphie' | 'broderie' | 'dtf',
     key: string,
-    value: number
+    value: number,
+    textileType?: 'clair' | 'fonce',
+    embroiderySize?: 'petite' | 'grande'
   ) => {
     setPricing(prev => prev.map(p => {
       if (p.technique === technique) {
-        return {
-          ...p,
-          prices: {
-            ...p.prices,
-            [key]: value,
-          },
+        // Pour la sérigraphie, mettre à jour le bon tableau selon le type de textile
+        if (technique === 'serigraphie' && textileType) {
+          const serigraphiePricing = p as SerigraphiePricing
+          if (textileType === 'clair') {
+            return {
+              ...serigraphiePricing,
+              pricesClair: {
+                ...serigraphiePricing.pricesClair,
+                [key]: value,
+              },
+            }
+          } else {
+            return {
+              ...serigraphiePricing,
+              pricesFonce: {
+                ...serigraphiePricing.pricesFonce,
+                [key]: value,
+              },
+            }
+          }
+        } else if (technique === 'broderie' && embroiderySize) {
+          // Pour la broderie, mettre à jour le bon tableau selon la taille
+          const broderiePricing = p as BroderiePricing
+          if (embroiderySize === 'petite') {
+            return {
+              ...broderiePricing,
+              pricesPetite: {
+                ...broderiePricing.pricesPetite,
+                [key]: value,
+              },
+            }
+          } else {
+            return {
+              ...broderiePricing,
+              pricesGrande: {
+                ...broderiePricing.pricesGrande,
+                [key]: value,
+              },
+            }
+          }
+        } else {
+          // Pour DTF, utiliser prices
+          return {
+            ...p,
+            prices: {
+              ...p.prices,
+              [key]: value,
+            },
+          }
         }
       }
       return p
@@ -123,17 +171,49 @@ export function ServicePricingManager() {
     setPricing(prev => prev.map(p => {
       if (p.technique === technique && p.quantityRanges.length > 1) {
         const newRanges = p.quantityRanges.filter((_, i) => i !== index)
-        // Supprimer les prix associés à cette fourchette
-        const newPrices: Record<string, number> = {}
-        Object.entries(p.prices).forEach(([key, value]) => {
-          if (!key.startsWith(p.quantityRanges[index].label + '-')) {
-            newPrices[key] = value
+        const rangeToRemove = p.quantityRanges[index]
+        
+        const filterPrices = (prices: Record<string, number>) => {
+          const newPrices: Record<string, number> = {}
+          Object.entries(prices || {}).forEach(([key, value]) => {
+            if (!key.startsWith(rangeToRemove.label + '-')) {
+              newPrices[key] = value
+            }
+          })
+          return newPrices
+        }
+        
+        // Pour la sérigraphie, supprimer dans les deux tableaux
+        if (technique === 'serigraphie') {
+          const serigraphiePricing = p as SerigraphiePricing
+          return {
+            ...serigraphiePricing,
+            quantityRanges: newRanges,
+            pricesClair: filterPrices(serigraphiePricing.pricesClair || {}),
+            pricesFonce: filterPrices(serigraphiePricing.pricesFonce || {}),
           }
-        })
-        return {
-          ...p,
-          quantityRanges: newRanges,
-          prices: newPrices,
+        } else if (technique === 'broderie') {
+          // Pour la broderie, supprimer dans les deux tableaux
+          const broderiePricing = p as BroderiePricing
+          return {
+            ...broderiePricing,
+            quantityRanges: newRanges,
+            pricesPetite: filterPrices(broderiePricing.pricesPetite || {}),
+            pricesGrande: filterPrices(broderiePricing.pricesGrande || {}),
+          }
+        } else {
+          // Pour DTF, utiliser prices
+          const newPrices: Record<string, number> = {}
+          Object.entries(p.prices).forEach(([key, value]) => {
+            if (!key.startsWith(rangeToRemove.label + '-')) {
+              newPrices[key] = value
+            }
+          })
+          return {
+            ...p,
+            quantityRanges: newRanges,
+            prices: newPrices,
+          }
         }
       }
       return p
@@ -159,17 +239,22 @@ export function ServicePricingManager() {
       if (p.technique === technique) {
         const serigraphiePricing = p as SerigraphiePricing
         const newColorCounts = serigraphiePricing.colorCounts.filter(c => c !== colorCount)
-        // Supprimer les prix associés à ce nombre de couleurs
-        const newPrices: Record<string, number> = {}
-        Object.entries(serigraphiePricing.prices).forEach(([key, value]) => {
-          if (!key.endsWith(`-${colorCount}`)) {
-            newPrices[key] = value
-          }
-        })
+        // Supprimer les prix associés à ce nombre de couleurs dans les deux tableaux
+        const filterPrices = (prices: Record<string, number>) => {
+          const newPrices: Record<string, number> = {}
+          Object.entries(prices || {}).forEach(([key, value]) => {
+            if (!key.endsWith(`-${colorCount}`)) {
+              newPrices[key] = value
+            }
+          })
+          return newPrices
+        }
+        
         return {
           ...serigraphiePricing,
           colorCounts: newColorCounts,
-          prices: newPrices,
+          pricesClair: filterPrices(serigraphiePricing.pricesClair || {}),
+          pricesFonce: filterPrices(serigraphiePricing.pricesFonce || {}),
         }
       }
       return p
@@ -200,18 +285,24 @@ export function ServicePricingManager() {
         const broderiePricing = p as BroderiePricing
         if (broderiePricing.pointRanges.length <= 1) return p
         const newRanges = broderiePricing.pointRanges.filter((_, i) => i !== index)
-        // Supprimer les prix associés à cette fourchette
+        // Supprimer les prix associés à cette fourchette pour les deux tableaux
         const rangeToRemove = broderiePricing.pointRanges[index]
-        const newPrices: Record<string, number> = {}
-        Object.entries(broderiePricing.prices).forEach(([key, value]) => {
-          if (!key.endsWith(`-${rangeToRemove.label}`)) {
-            newPrices[key] = value
-          }
-        })
+        
+        const filterPrices = (prices: Record<string, number>) => {
+          const newPrices: Record<string, number> = {}
+          Object.entries(prices || {}).forEach(([key, value]) => {
+            if (!key.endsWith(`-${rangeToRemove.label}`)) {
+              newPrices[key] = value
+            }
+          })
+          return newPrices
+        }
+        
         return {
           ...broderiePricing,
           pointRanges: newRanges,
-          prices: newPrices,
+          pricesPetite: filterPrices(broderiePricing.pricesPetite || {}),
+          pricesGrande: filterPrices(broderiePricing.pricesGrande || {}),
         }
       }
       return p
@@ -224,7 +315,7 @@ export function ServicePricingManager() {
         const dtfPricing = p as DTFPricing
         return {
           ...dtfPricing,
-          dimensions: [...dtfPricing.dimensions, 'Nouvelle dimension'],
+          dimensions: [...dtfPricing.dimensions, t('newDimension')],
         }
       }
       return p
@@ -394,7 +485,7 @@ export function ServicePricingManager() {
                   onClick={() => addColorCount('serigraphie')}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Ajouter une couleur
+                  {t('addColor')}
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -415,45 +506,181 @@ export function ServicePricingManager() {
               </div>
             </div>
 
-            {/* Tableau croisé */}
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border">
-                <thead>
-                  <tr className="bg-muted">
-                    <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Couleurs</th>
-                    {serigraphiePricing.colorCounts.map(colorCount => (
-                      <th key={colorCount} className="border p-2 text-center min-w-[100px]">
-                        {colorCount} couleur{colorCount > 1 ? 's' : ''}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {serigraphiePricing.quantityRanges.map(range => (
-                    <tr key={range.label}>
-                      <td className="border p-2 font-medium sticky left-0 bg-background">
-                        {range.label}
-                      </td>
-                      {serigraphiePricing.colorCounts.map(colorCount => {
-                        const key = `${range.label}-${colorCount}`
-                        return (
-                          <td key={colorCount} className="border p-1">
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={serigraphiePricing.prices[key] || ''}
-                              onChange={(e) => updatePrice('serigraphie', key, parseFloat(e.target.value) || 0)}
-                              placeholder="0.00"
-                              className="w-full text-center"
-                            />
+            {/* Tableau croisé - Textile clair */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold mb-2">Textile clair</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Couleurs</th>
+                        {serigraphiePricing.colorCounts.map(colorCount => (
+                          <th key={colorCount} className="border p-2 text-center min-w-[100px]">
+                            {colorCount} couleur{colorCount > 1 ? 's' : ''}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {serigraphiePricing.quantityRanges.map(range => (
+                        <tr key={range.label}>
+                          <td className="border p-2 font-medium sticky left-0 bg-background">
+                            {range.label}
                           </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          {serigraphiePricing.colorCounts.map(colorCount => {
+                            const key = `${range.label}-${colorCount}`
+                            return (
+                              <td key={colorCount} className="border p-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={serigraphiePricing.pricesClair?.[key] || ''}
+                                  onChange={(e) => updatePrice('serigraphie', key, parseFloat(e.target.value) || 0, 'clair')}
+                                  placeholder="0.00"
+                                  className="w-full text-center"
+                                />
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Tableau croisé - Textile foncé */}
+              <div>
+                <h4 className="font-semibold mb-2">Textile foncé</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Couleurs</th>
+                        {serigraphiePricing.colorCounts.map(colorCount => (
+                          <th key={colorCount} className="border p-2 text-center min-w-[100px]">
+                            {colorCount} couleur{colorCount > 1 ? 's' : ''}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {serigraphiePricing.quantityRanges.map(range => (
+                        <tr key={range.label}>
+                          <td className="border p-2 font-medium sticky left-0 bg-background">
+                            {range.label}
+                          </td>
+                          {serigraphiePricing.colorCounts.map(colorCount => {
+                            const key = `${range.label}-${colorCount}`
+                            return (
+                              <td key={colorCount} className="border p-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={serigraphiePricing.pricesFonce?.[key] || ''}
+                                  onChange={(e) => updatePrice('serigraphie', key, parseFloat(e.target.value) || 0, 'fonce')}
+                                  placeholder="0.00"
+                                  className="w-full text-center"
+                                />
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Options de sérigraphie */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Options supplémentaires (Discharge, Gold, etc.)</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const serigraphiePricing = pricing.find(p => p.technique === 'serigraphie') as SerigraphiePricing
+                    const newOption = {
+                      id: `option-${Date.now()}`,
+                      name: t('newOption'),
+                      surchargePercentage: 10,
+                    }
+                    setPricing(prev => prev.map(p => 
+                      p.technique === 'serigraphie' 
+                        ? { ...p, options: [...(serigraphiePricing.options || []), newOption] }
+                        : p
+                    ))
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {t('addOption')}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {serigraphiePricing.options?.map((option, idx) => (
+                  <div key={option.id || idx} className="flex items-center gap-4 border rounded p-3">
+                    <div className="flex-1 space-y-2">
+                      <Input
+                        placeholder="Nom de l'option (ex: Discharge)"
+                        value={option.name}
+                        onChange={(e) => {
+                          const newOptions = [...(serigraphiePricing.options || [])]
+                          newOptions[idx] = { ...option, name: e.target.value }
+                          setPricing(prev => prev.map(p => 
+                            p.technique === 'serigraphie' 
+                              ? { ...p, options: newOptions }
+                              : p
+                          ))
+                        }}
+                        className="w-full"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          placeholder="Pourcentage"
+                          value={option.surchargePercentage}
+                          onChange={(e) => {
+                            const newOptions = [...(serigraphiePricing.options || [])]
+                            newOptions[idx] = { ...option, surchargePercentage: parseFloat(e.target.value) || 0 }
+                            setPricing(prev => prev.map(p => 
+                              p.technique === 'serigraphie' 
+                                ? { ...p, options: newOptions }
+                                : p
+                            ))
+                          }}
+                          className="w-32"
+                        />
+                        <span className="text-sm text-muted-foreground">% supplémentaire</span>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        const newOptions = (serigraphiePricing.options || []).filter((_, i) => i !== idx)
+                        setPricing(prev => prev.map(p => 
+                          p.technique === 'serigraphie' 
+                            ? { ...p, options: newOptions }
+                            : p
+                        ))
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                {(!serigraphiePricing.options || serigraphiePricing.options.length === 0) && (
+                  <p className="text-sm text-muted-foreground">Aucune option configurée</p>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -657,45 +884,94 @@ export function ServicePricingManager() {
               </div>
             </div>
 
-            {/* Tableau croisé */}
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border">
-                <thead>
-                  <tr className="bg-muted">
-                    <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Points</th>
-                    {broderiePricing.pointRanges.map(range => (
-                      <th key={range.label} className="border p-2 text-center min-w-[120px]">
-                        {range.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {broderiePricing.quantityRanges.map(range => (
-                    <tr key={range.label}>
-                      <td className="border p-2 font-medium sticky left-0 bg-background">
-                        {range.label}
-                      </td>
-                      {broderiePricing.pointRanges.map(pointRange => {
-                        const key = `${range.label}-${pointRange.label}`
-                        return (
-                          <td key={pointRange.label} className="border p-1">
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={broderiePricing.prices[key] || ''}
-                              onChange={(e) => updatePrice('broderie', key, parseFloat(e.target.value) || 0)}
-                              placeholder="0.00"
-                              className="w-full text-center"
-                            />
+            {/* Tableau croisé - Petite broderie (max 10x10cm) */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold mb-2">Petite broderie (max 10x10 cm)</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Points</th>
+                        {broderiePricing.pointRanges.map(range => (
+                          <th key={range.label} className="border p-2 text-center min-w-[120px]">
+                            {range.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {broderiePricing.quantityRanges.map(range => (
+                        <tr key={range.label}>
+                          <td className="border p-2 font-medium sticky left-0 bg-background">
+                            {range.label}
                           </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          {broderiePricing.pointRanges.map(pointRange => {
+                            const key = `${range.label}-${pointRange.label}`
+                            return (
+                              <td key={pointRange.label} className="border p-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={broderiePricing.pricesPetite?.[key] || ''}
+                                  onChange={(e) => updatePrice('broderie', key, parseFloat(e.target.value) || 0, 'petite')}
+                                  placeholder="0.00"
+                                  className="w-full text-center"
+                                />
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Tableau croisé - Grande broderie (max 20x25cm) */}
+              <div>
+                <h4 className="font-semibold mb-2">Grande broderie (max 20x25 cm)</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border">
+                    <thead>
+                      <tr className="bg-muted">
+                        <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Points</th>
+                        {broderiePricing.pointRanges.map(range => (
+                          <th key={range.label} className="border p-2 text-center min-w-[120px]">
+                            {range.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {broderiePricing.quantityRanges.map(range => (
+                        <tr key={range.label}>
+                          <td className="border p-2 font-medium sticky left-0 bg-background">
+                            {range.label}
+                          </td>
+                          {broderiePricing.pointRanges.map(pointRange => {
+                            const key = `${range.label}-${pointRange.label}`
+                            return (
+                              <td key={pointRange.label} className="border p-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={broderiePricing.pricesGrande?.[key] || ''}
+                                  onChange={(e) => updatePrice('broderie', key, parseFloat(e.target.value) || 0, 'grande')}
+                                  placeholder="0.00"
+                                  className="w-full text-center"
+                                />
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

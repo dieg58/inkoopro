@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { TechniqueType, TechniqueOptions, SerigraphieOptions, BroderieOptions, DTFOptions, TextileType, Position, PositionType, ProductCategory } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { techniques, techniqueConfig, availableDimensions, positionConfig, positionLabels } from '@/lib/data'
 import { Plus, Trash2, Upload, X } from 'lucide-react'
@@ -22,6 +24,9 @@ interface TechniqueSelectorProps {
   notes: string
   onNotesChange: (notes: string) => void
   productCategory?: ProductCategory
+  servicePricing?: any[] // Prix des services pour afficher les options disponibles
+  vectorization?: boolean // Vectorisation du logo
+  onVectorizationChange?: (vectorization: boolean) => void // Callback pour la vectorisation
 }
 
 export function TechniqueSelector({
@@ -36,7 +41,11 @@ export function TechniqueSelector({
   notes,
   onNotesChange,
   productCategory = 'autre',
+  servicePricing = [],
+  vectorization,
+  onVectorizationChange,
 }: TechniqueSelectorProps) {
+  const t = useTranslations('technique')
   const [localOptions, setLocalOptions] = useState<TechniqueOptions | null>(options)
   const [customDimension, setCustomDimension] = useState('')
 
@@ -54,18 +63,21 @@ export function TechniqueSelector({
         setLocalOptions({
           textileType: 'clair',
           nombreCouleurs: 1,
-          dimension: '10x10 cm',
           nombreEmplacements: 1,
+          selectedOptions: [],
         } as SerigraphieOptions)
       } else if (selectedTechnique === 'broderie') {
         setLocalOptions({
           nombrePoints: 5000,
           nombreEmplacements: 1,
+          embroiderySize: 'petite', // Par défaut : petite broderie
+          isPersonalization: false,
         } as BroderieOptions)
       } else if (selectedTechnique === 'dtf') {
         setLocalOptions({
           dimension: '10x10 cm',
           nombreEmplacements: 1,
+          isPersonalization: false,
         } as DTFOptions)
       }
       
@@ -153,9 +165,7 @@ export function TechniqueSelector({
       // Ne pas mettre à jour les options pour l'instant, attendre la saisie
     } else {
       setCustomDimension('')
-      if (selectedTechnique === 'serigraphie') {
-        updateOptions({ dimension } as Partial<SerigraphieOptions>)
-      } else if (selectedTechnique === 'dtf') {
+      if (selectedTechnique === 'dtf') {
         updateOptions({ dimension } as Partial<DTFOptions>)
       }
     }
@@ -163,19 +173,14 @@ export function TechniqueSelector({
 
   const handleCustomDimensionChange = (value: string) => {
     setCustomDimension(value)
-    if (selectedTechnique === 'serigraphie') {
-      updateOptions({ dimension: value } as Partial<SerigraphieOptions>)
-    } else if (selectedTechnique === 'dtf') {
+    if (selectedTechnique === 'dtf') {
       updateOptions({ dimension: value } as Partial<DTFOptions>)
     }
   }
 
   const getDimensionDisplayValue = () => {
     if (!localOptions) return ''
-    if (selectedTechnique === 'serigraphie') {
-      const dim = (localOptions as SerigraphieOptions).dimension
-      return availableDimensions.includes(dim) ? dim : 'Personnalisé'
-    } else if (selectedTechnique === 'dtf') {
+    if (selectedTechnique === 'dtf') {
       const dim = (localOptions as DTFOptions).dimension
       return availableDimensions.includes(dim) ? dim : 'Personnalisé'
     }
@@ -184,10 +189,7 @@ export function TechniqueSelector({
 
   const isCustomDimension = () => {
     if (!localOptions) return false
-    if (selectedTechnique === 'serigraphie') {
-      const dim = (localOptions as SerigraphieOptions).dimension
-      return dim && !availableDimensions.includes(dim)
-    } else if (selectedTechnique === 'dtf') {
+    if (selectedTechnique === 'dtf') {
       const dim = (localOptions as DTFOptions).dimension
       return dim && !availableDimensions.includes(dim)
     }
@@ -197,12 +199,12 @@ export function TechniqueSelector({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>3. Choisissez la technique de marquage</CardTitle>
-        <CardDescription>Sélectionnez la technique d'impression ou de broderie</CardDescription>
+        <CardTitle>{t('selectTechnique')}</CardTitle>
+        <CardDescription>{t('selectTechnique')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label>Technique</Label>
+          <Label>{t('selectTechnique')}</Label>
           <Select
             value={selectedTechnique || ''}
             onValueChange={(value) => {
@@ -212,7 +214,7 @@ export function TechniqueSelector({
             }}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Sélectionnez une technique" />
+              <SelectValue placeholder={t('selectTechnique')} />
             </SelectTrigger>
             <SelectContent>
               {techniques.map(technique => (
@@ -228,7 +230,7 @@ export function TechniqueSelector({
         {selectedTechnique === 'serigraphie' && localOptions && (
           <div className="space-y-4 pt-4 border-t">
             <div className="space-y-2">
-              <Label>Type de textile</Label>
+              <Label>{t('textileType')}</Label>
               <Select
                 value={(localOptions as SerigraphieOptions).textileType}
                 onValueChange={(value) =>
@@ -241,15 +243,15 @@ export function TechniqueSelector({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="clair">Textile clair</SelectItem>
-                  <SelectItem value="fonce">Textile foncé</SelectItem>
+                  <SelectItem value="clair">{t('light')}</SelectItem>
+                  <SelectItem value="fonce">{t('dark')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label>
-                Nombre de couleurs (min: {techniqueConfig.serigraphie.minCouleurs}, max: {techniqueConfig.serigraphie.maxCouleurs})
+                {t('colorCount')} ({t('minColors', { min: techniqueConfig.serigraphie.minCouleurs })}, {t('maxColors', { max: techniqueConfig.serigraphie.maxCouleurs })})
               </Label>
               <Input
                 type="number"
@@ -261,35 +263,53 @@ export function TechniqueSelector({
                     nombreCouleurs: parseInt(e.target.value) || 1,
                   } as Partial<SerigraphieOptions>)
                 }
+                onWheel={(e) => e.currentTarget.blur()}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Dimension du marquage</Label>
-              <Select
-                value={getDimensionDisplayValue()}
-                onValueChange={handleDimensionChange}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableDimensions.map(dim => (
-                    <SelectItem key={dim} value={dim}>
-                      {dim}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(getDimensionDisplayValue() === 'Personnalisé' || isCustomDimension()) && (
-                <Input
-                  placeholder="Ex: 12x18 cm"
-                  value={isCustomDimension() ? (localOptions as SerigraphieOptions).dimension : customDimension}
-                  onChange={(e) => handleCustomDimensionChange(e.target.value)}
-                  className="mt-2"
-                />
-              )}
-            </div>
+            {/* Options de sérigraphie (Discharge, Gold, etc.) */}
+            {(() => {
+              const serigraphiePricing = servicePricing.find((p: any) => p.technique === 'serigraphie')
+              const availableOptions = serigraphiePricing?.options || []
+              
+              if (availableOptions.length > 0) {
+                const currentOptions = (localOptions as SerigraphieOptions).selectedOptions || []
+                
+                return (
+                  <div className="space-y-2">
+                    <Label>{t('options')}</Label>
+                    <div className="space-y-2">
+                      {availableOptions.map((option: any) => (
+                        <div key={option.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`serigraphie-option-${option.id}`}
+                            checked={currentOptions.includes(option.id)}
+                            onCheckedChange={(checked) => {
+                              const newOptions = checked
+                                ? [...currentOptions, option.id]
+                                : currentOptions.filter((id: string) => id !== option.id)
+                              updateOptions({
+                                selectedOptions: newOptions,
+                              } as Partial<SerigraphieOptions>)
+                            }}
+                          />
+                          <Label
+                            htmlFor={`serigraphie-option-${option.id}`}
+                            className="text-sm font-normal cursor-pointer flex-1"
+                          >
+                            {option.name} (+{option.surchargePercentage}%)
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t('optionsDescription')}
+                    </p>
+                  </div>
+                )
+              }
+              return null
+            })()}
 
           </div>
         )}
@@ -298,8 +318,31 @@ export function TechniqueSelector({
         {selectedTechnique === 'broderie' && localOptions && (
           <div className="space-y-4 pt-4 border-t">
             <div className="space-y-2">
+              <Label>{t('embroiderySize')}</Label>
+              <Select
+                value={(localOptions as BroderieOptions).embroiderySize || 'petite'}
+                onValueChange={(value) =>
+                  updateOptions({
+                    embroiderySize: value as 'petite' | 'grande',
+                  } as Partial<BroderieOptions>)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="petite">{t('small')}</SelectItem>
+                  <SelectItem value="grande">{t('large')}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t('pointsDescription')}
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label>
-                Nombre de points (min: {techniqueConfig.broderie.minPoints.toLocaleString()}, max: {techniqueConfig.broderie.maxPoints.toLocaleString()})
+                {t('points')} ({t('minPoints', { min: techniqueConfig.broderie.minPoints.toLocaleString() })}, {t('maxPoints', { max: techniqueConfig.broderie.maxPoints.toLocaleString() })})
               </Label>
               <Input
                 type="number"
@@ -311,12 +354,30 @@ export function TechniqueSelector({
                     nombrePoints: parseInt(e.target.value) || 1000,
                   } as Partial<BroderieOptions>)
                 }
+                onWheel={(e) => e.currentTarget.blur()}
               />
               <p className="text-xs text-muted-foreground">
-                Le nombre de points détermine la complexité et la taille de la broderie
+                Le nombre de points détermine la complexité de la broderie
               </p>
             </div>
 
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="broderie-personalization"
+                checked={(localOptions as BroderieOptions).isPersonalization || false}
+                onCheckedChange={(checked) =>
+                  updateOptions({
+                    isPersonalization: checked === true,
+                  } as Partial<BroderieOptions>)
+                }
+              />
+              <Label
+                htmlFor="broderie-personalization"
+                className="text-sm font-normal cursor-pointer"
+              >
+                {t('personalization')}
+              </Label>
+            </div>
           </div>
         )}
 
@@ -350,6 +411,23 @@ export function TechniqueSelector({
               )}
             </div>
 
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="dtf-personalization"
+                checked={(localOptions as DTFOptions).isPersonalization || false}
+                onCheckedChange={(checked) =>
+                  updateOptions({
+                    isPersonalization: checked === true,
+                  } as Partial<DTFOptions>)
+                }
+              />
+              <Label
+                htmlFor="dtf-personalization"
+                className="text-sm font-normal cursor-pointer"
+              >
+                {t('personalization')}
+              </Label>
+            </div>
           </div>
         )}
 
@@ -357,7 +435,7 @@ export function TechniqueSelector({
         {selectedTechnique && localOptions && (
           <div className="space-y-4 pt-4 border-t">
             <div className="space-y-2">
-              <Label>Position du marquage</Label>
+              <Label>{t('position')}</Label>
               <Select
                 value={position?.type || ''}
                 onValueChange={(value) =>
@@ -377,7 +455,7 @@ export function TechniqueSelector({
               </Select>
               {position?.type === 'custom' && (
                 <Input
-                  placeholder="Description de la position personnalisée"
+                  placeholder={t('customPositionPlaceholder')}
                   value={position.customDescription || ''}
                   onChange={(e) =>
                     onPositionChange({ ...position, customDescription: e.target.value })
@@ -389,7 +467,7 @@ export function TechniqueSelector({
 
             {/* Fichiers */}
             <div className="space-y-2">
-              <Label>Fichiers</Label>
+              <Label>{t('files')}</Label>
               <div className="space-y-2">
                 {files.map((file) => (
                   <div key={file.id} className="flex items-center justify-between p-2 border rounded-lg">
@@ -413,7 +491,7 @@ export function TechniqueSelector({
                 ))}
                 <label className="flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent">
                   <Upload className="h-4 w-4 mr-2" />
-                  <span className="text-sm">Ajouter un fichier</span>
+                  <span className="text-sm">{t('uploadFiles')}</span>
                   <input
                     type="file"
                     multiple
@@ -423,15 +501,39 @@ export function TechniqueSelector({
                   />
                 </label>
               </div>
+              
+              {/* Option vectorisation - affichée uniquement si des fichiers sont ajoutés */}
+              {files.length > 0 && onVectorizationChange && (
+                <div className="pt-2 border-t">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="vectorization"
+                      checked={vectorization || false}
+                      onCheckedChange={(checked) => {
+                        onVectorizationChange(checked === true)
+                      }}
+                    />
+                    <Label
+                      htmlFor="vectorization"
+                      className="text-sm font-normal cursor-pointer flex-1"
+                    >
+                      {t('vectorization')}
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground ml-6 mt-1">
+                    {t('vectorizationDescription')}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label>Notes</Label>
+              <Label>{t('notes')}</Label>
               <textarea
                 value={notes}
                 onChange={(e) => onNotesChange(e.target.value)}
-                placeholder="Ajoutez des notes pour ce marquage..."
+                placeholder={t('notesPlaceholder')}
                 className="w-full min-h-[100px] px-3 py-2 text-sm border rounded-md resize-y focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>

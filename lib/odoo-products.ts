@@ -114,7 +114,7 @@ async function saveToCache(products: Product[]): Promise<void> {
  * Utilise un cache quotidien pour éviter de recharger à chaque fois
  * @param forceRefresh - Force la mise à jour même si le cache est valide
  */
-export async function getProductsFromOdoo(forceRefresh: boolean = false): Promise<Product[]> {
+export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?: number): Promise<Product[]> {
   // Vérifier le cache si on ne force pas le refresh
   if (!forceRefresh) {
     const cachedProducts = await loadFromCache()
@@ -146,8 +146,8 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false): Promis
     
     console.log('✅ Authentification Odoo réussie, UID:', auth.uid, 'Session:', auth.sessionId ? 'OK' : 'N/A')
 
-    // D'abord, récupérer l'ID de la catégorie ecommerce "textile"
-    console.log('🔍 Recherche de la catégorie ecommerce "textile"...')
+    // D'abord, récupérer toutes les catégories ecommerce qui contiennent "textile" ou "t-shirt"
+    console.log('🔍 Recherche des catégories ecommerce "textile" et sous-catégories...')
     const textileCategoryRequest = {
       jsonrpc: '2.0',
       method: 'call',
@@ -161,11 +161,15 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false): Promis
           'product.public.category',
           'search_read',
           [
-            [['name', 'ilike', 'textile']], // Recherche insensible à la casse
+            [
+              '|',
+              ['name', 'ilike', 'textile'],
+              ['name', 'ilike', 't-shirt'],
+            ],
           ],
           {
             fields: ['id', 'name', 'parent_id'],
-            limit: 10,
+            limit: 50, // Augmenter la limite pour inclure toutes les sous-catégories
           },
         ],
       },
@@ -181,37 +185,187 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false): Promis
     const textileCategoryData = await textileCategoryResponse.json()
     const textileCategories = textileCategoryData.result || []
     
-    // Trouver la catégorie "textile" (peut être parent ou enfant)
-    let textileCategoryId: number | null = null
+    // Trouver la catégorie parent "textile" et collecter toutes les sous-catégories
+    let textilePublicCategoryId: number | null = null
+    const textilePublicCategoryIds: number[] = [] // Toutes les catégories textile (parent + enfants)
+    
+    // D'abord, trouver la catégorie parent "textile"
     for (const cat of textileCategories) {
-      // Si c'est une catégorie parent (pas de parent_id) ou si le nom est exactement "textile"
       if (cat.name.toLowerCase() === 'textile' && (!cat.parent_id || cat.parent_id.length === 0)) {
-        textileCategoryId = cat.id
-        console.log(`✅ Catégorie "textile" trouvée (ID: ${textileCategoryId})`)
+        textilePublicCategoryId = cat.id
+        textilePublicCategoryIds.push(cat.id)
+        console.log(`✅ Catégorie ecommerce parent "textile" trouvée (ID: ${textilePublicCategoryId})`)
         break
       }
     }
     
     // Si pas trouvée exactement, prendre la première qui contient "textile"
-    if (!textileCategoryId && textileCategories.length > 0) {
-      textileCategoryId = textileCategories[0].id
-      console.log(`⚠️  Catégorie "textile" exacte non trouvée, utilisation de "${textileCategories[0].name}" (ID: ${textileCategoryId})`)
+    if (!textilePublicCategoryId && textileCategories.length > 0) {
+      // Chercher une catégorie sans parent qui contient "textile"
+      const parentCategory = textileCategories.find(cat => 
+        cat.name.toLowerCase().includes('textile') && (!cat.parent_id || cat.parent_id.length === 0)
+      )
+      if (parentCategory) {
+        textilePublicCategoryId = parentCategory.id
+        textilePublicCategoryIds.push(parentCategory.id)
+        console.log(`⚠️  Catégorie ecommerce "textile" exacte non trouvée, utilisation de "${parentCategory.name}" (ID: ${textilePublicCategoryId})`)
+      }
+    }
+    
+    // Collecter toutes les sous-catégories (y compris "T-Shirts")
+    for (const cat of textileCategories) {
+      // Si c'est une sous-catégorie de textile ou contient "t-shirt"
+      if (cat.id !== textilePublicCategoryId) {
+        const isChildOfTextile = cat.parent_id && cat.parent_id[0] === textilePublicCategoryId
+        const isTShirt = cat.name.toLowerCase().includes('t-shirt') || cat.name.toLowerCase().includes('tshirt')
+        
+        if (isChildOfTextile || isTShirt) {
+          textilePublicCategoryIds.push(cat.id)
+          console.log(`  📁 Sous-catégorie trouvée: "${cat.name}" (ID: ${cat.id})`)
+        }
+      }
+    }
+    
+    console.log(`📋 Total catégories ecommerce textile trouvées: ${textilePublicCategoryIds.length}`)
+
+    // Aussi chercher la catégorie produit interne "textile" et sous-catégories
+    console.log('🔍 Recherche de la catégorie produit interne "textile" et sous-catégories...')
+    const productCategoryRequest = {
+      jsonrpc: '2.0',
+      method: 'call',
+      params: {
+        service: 'object',
+        method: 'execute_kw',
+        args: [
+          ODOO_DB,
+          auth.uid,
+          ODOO_PASSWORD,
+          'product.category',
+          'search_read',
+          [
+            [
+              '|',
+              ['name', 'ilike', 'textile'],
+              ['name', 'ilike', 't-shirt'],
+            ],
+          ],
+          {
+            fields: ['id', 'name', 'parent_id'],
+            limit: 50, // Augmenter la limite pour inclure toutes les sous-catégories
+          },
+        ],
+      },
     }
 
-    if (!textileCategoryId) {
-      console.warn('⚠️  Catégorie ecommerce "textile" non trouvée dans Odoo')
-      console.warn('   → Vérifiez que la catégorie existe dans Odoo (Ventes > Configuration > Catégories ecommerce)')
+    const productCategoryResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(productCategoryRequest),
+      signal: AbortSignal.timeout(30000),
+    })
+
+    const productCategoryData = await productCategoryResponse.json()
+    const productCategories = productCategoryData.result || []
+    
+    // Trouver la catégorie produit "textile" et collecter toutes les sous-catégories
+    let textileProductCategoryId: number | null = null
+    const textileProductCategoryIds: number[] = [] // Toutes les catégories produit textile (parent + enfants)
+    
+    // D'abord, trouver la catégorie parent "textile"
+    for (const cat of productCategories) {
+      if (cat.name.toLowerCase() === 'textile' && (!cat.parent_id || cat.parent_id.length === 0)) {
+        textileProductCategoryId = cat.id
+        textileProductCategoryIds.push(cat.id)
+        console.log(`✅ Catégorie produit parent "textile" trouvée (ID: ${textileProductCategoryId})`)
+        break
+      }
+    }
+    
+    if (!textileProductCategoryId && productCategories.length > 0) {
+      // Chercher une catégorie sans parent qui contient "textile"
+      const parentCategory = productCategories.find(cat => 
+        cat.name.toLowerCase().includes('textile') && (!cat.parent_id || cat.parent_id.length === 0)
+      )
+      if (parentCategory) {
+        textileProductCategoryId = parentCategory.id
+        textileProductCategoryIds.push(parentCategory.id)
+        console.log(`⚠️  Catégorie produit "textile" exacte non trouvée, utilisation de "${parentCategory.name}" (ID: ${textileProductCategoryId})`)
+      }
+    }
+    
+    // Collecter toutes les sous-catégories (y compris "T-Shirts")
+    for (const cat of productCategories) {
+      if (cat.id !== textileProductCategoryId) {
+        const isChildOfTextile = cat.parent_id && cat.parent_id[0] === textileProductCategoryId
+        const isTShirt = cat.name.toLowerCase().includes('t-shirt') || cat.name.toLowerCase().includes('tshirt')
+        
+        if (isChildOfTextile || isTShirt) {
+          textileProductCategoryIds.push(cat.id)
+          console.log(`  📁 Sous-catégorie produit trouvée: "${cat.name}" (ID: ${cat.id})`)
+        }
+      }
+    }
+    
+    console.log(`📋 Total catégories produit textile trouvées: ${textileProductCategoryIds.length}`)
+
+    if (textilePublicCategoryIds.length === 0 && textileProductCategoryIds.length === 0) {
+      console.warn('⚠️  Catégorie "textile" non trouvée dans Odoo (ni ecommerce ni produit)')
+      console.warn('   → Vérifiez que la catégorie existe dans Odoo')
       console.warn('   → Récupération de tous les produits (pas de filtre)')
     }
 
     // Construire le filtre pour les produits
+    // On cherche les produits qui sont dans une des catégories ecommerce OU une des catégories produit
     const productFilters: any[] = []
-    if (textileCategoryId) {
-      // Filtrer les produits qui ont la catégorie "textile" dans leurs public_categ_ids
-      // On utilise 'child_of' pour inclure aussi les sous-catégories
-      productFilters.push(['public_categ_ids', 'child_of', textileCategoryId])
-      console.log(`📋 Filtre appliqué: produits dans la catégorie ecommerce "textile" (ID: ${textileCategoryId})`)
+    const orConditions: any[] = []
+    
+    // Ajouter un filtre pour chaque catégorie ecommerce trouvée
+    for (const catId of textilePublicCategoryIds) {
+      orConditions.push(['public_categ_ids', 'in', [catId]])
     }
+    
+    // Ajouter un filtre pour chaque catégorie produit trouvée
+    for (const catId of textileProductCategoryIds) {
+      orConditions.push(['categ_id', '=', catId])
+    }
+    
+    // Si on a trouvé la catégorie parent, utiliser aussi child_of pour inclure toutes les sous-catégories
+    if (textilePublicCategoryId) {
+      orConditions.push(['public_categ_ids', 'child_of', textilePublicCategoryId])
+      console.log(`📋 Filtre ecommerce (child_of): produits dans la catégorie ecommerce "textile" et sous-catégories (ID: ${textilePublicCategoryId})`)
+    }
+    
+    if (textileProductCategoryId) {
+      orConditions.push(['categ_id', 'child_of', textileProductCategoryId])
+      console.log(`📋 Filtre produit (child_of): produits dans la catégorie produit "textile" et sous-catégories (ID: ${textileProductCategoryId})`)
+    }
+    
+    // Si on a au moins une catégorie, utiliser un filtre OR
+    if (orConditions.length > 0) {
+      if (orConditions.length === 1) {
+        productFilters.push(...orConditions)
+      } else {
+        // Utiliser '|' (OR) pour combiner les conditions
+        // Syntaxe Odoo: ['|', condition1, condition2] pour 2 conditions
+        // Pour 3+ conditions: ['|', condition1, '|', condition2, condition3]
+        const orFilter: any[] = ['|', orConditions[0]]
+        for (let i = 1; i < orConditions.length; i++) {
+          if (i < orConditions.length - 1) {
+            orFilter.push('|', orConditions[i])
+          } else {
+            orFilter.push(orConditions[i])
+          }
+        }
+        productFilters.push(...orFilter)
+      }
+      console.log(`✅ Filtre appliqué: ${orConditions.length} condition(s) de catégorie "textile"`)
+    }
+    
+    // Ajouter des filtres supplémentaires pour les produits actifs et vendables
+    // Ces filtres sont combinés avec AND (par défaut dans Odoo quand on les met dans le même tableau)
+    productFilters.push(['sale_ok', '=', true])
+    productFilters.push(['active', '=', true])
+    console.log('📋 Filtres supplémentaires: sale_ok=True, active=True')
 
     // Récupérer les templates de produits depuis Odoo (product.template = produit avec variantes)
     // Pour Odoo, on doit inclure les identifiants dans chaque requête JSON-RPC
@@ -234,6 +388,9 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false): Promis
             fields: [
               'id', 
               'name', 
+              'default_code', // Référence produit (ex: K3025)
+              'supplier_ref', // Supplier Reference (ex: CGTW02T)
+              'seller_ids', // IDs des fournisseurs (product.supplierinfo)
               'description', 
               'description_sale', 
               'list_price', 
@@ -242,7 +399,8 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false): Promis
               'product_variant_ids', // IDs des variantes
               'attribute_line_ids', // Attributs (couleurs, tailles)
             ],
-            // Pas de limite pour récupérer tous les produits
+            // Limiter le nombre de produits si spécifié
+            ...(limit ? { limit } : {}), // Ajouter limit seulement si défini
             order: 'name asc',
           },
         ],
@@ -452,6 +610,76 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false): Promis
     for (let i = 0; i < products.length; i += BATCH_SIZE) {
       const batch = products.slice(i, i + BATCH_SIZE)
       console.log(`📦 Traitement du lot ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(products.length / BATCH_SIZE)} (${batch.length} produits)`)
+      
+      // Récupérer toutes les références fournisseurs pour ce lot en une seule requête
+      // seller_ids peut être un tableau d'IDs ou un tableau de tuples [id, name]
+      const allSellerIds = batch.flatMap((p: any) => {
+        if (!p.seller_ids || p.seller_ids.length === 0) return []
+        // Si c'est un tableau de tuples [id, name], extraire les IDs
+        return p.seller_ids.map((seller: any) => {
+          if (Array.isArray(seller) && seller.length > 0) {
+            return seller[0] // Prendre l'ID du tuple
+          }
+          return seller // Sinon, c'est déjà un ID
+        })
+      })
+      const supplierReferencesMap = new Map<number, string>() // Map: seller_id -> product_code
+      
+      
+      if (allSellerIds.length > 0) {
+        try {
+          const sellerRequest = {
+            jsonrpc: '2.0',
+            method: 'call',
+            params: {
+              service: 'object',
+              method: 'execute_kw',
+              args: [
+                ODOO_DB,
+                auth.uid,
+                ODOO_PASSWORD,
+                'product.supplierinfo',
+                'read',
+                [allSellerIds],
+                { fields: ['id', 'product_code', 'product_name', 'name', 'code', 'vendor_code', 'supplier_code', 'product_tmpl_id'] },
+              ],
+            },
+          }
+          
+          const sellerResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sellerRequest),
+          })
+          const sellerData = await sellerResponse.json()
+          const sellers = sellerData.result || []
+          
+          // Créer une map pour accès rapide
+          for (const seller of sellers) {
+            // Essayer plusieurs champs possibles pour la référence fournisseur
+            // Dans Odoo, le champ peut être : product_code, product_name, name, code, vendor_code, etc.
+            const ref = seller.product_code || 
+                       seller.product_name || 
+                       seller.name || 
+                       seller.code || 
+                       seller.vendor_code ||
+                       seller.supplier_code ||
+                       seller.product_variant_code ||
+                       seller.product_template_code ||
+                       (seller.product_tmpl_id && seller.product_tmpl_id[1]) // Parfois dans le nom du produit template
+            
+            if (ref) {
+              supplierReferencesMap.set(seller.id, ref)
+            }
+          }
+          
+          if (supplierReferencesMap.size > 0) {
+            console.log(`  📦 ${supplierReferencesMap.size} référence(s) fournisseur(s) récupérée(s) pour ce lot`)
+          }
+        } catch (error) {
+          console.warn(`  ⚠️  Erreur lors de la récupération des références fournisseurs:`, error)
+        }
+      }
       
       const batchResults = await Promise.all(
         batch.map(async (odooProduct: any) => {
@@ -877,9 +1105,33 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false): Promis
           basePrice = Math.min(...prices.filter(p => p > 0))
         }
         
+        // Récupérer la référence fournisseur (Supplier Reference) depuis product.supplierinfo si nécessaire
+        // Note: supplier_ref est maintenant récupéré directement depuis product.template
+        let supplierReference: string | undefined = undefined
+        if (odooProduct.seller_ids && odooProduct.seller_ids.length > 0) {
+          // Extraire les IDs des seller_ids (peut être un tableau de tuples [id, name])
+          const sellerIds = odooProduct.seller_ids.map((seller: any) => {
+            if (Array.isArray(seller) && seller.length > 0) {
+              return seller[0] // Prendre l'ID du tuple
+            }
+            return seller // Sinon, c'est déjà un ID
+          })
+          
+          // Prendre la première référence fournisseur trouvée depuis product.supplierinfo
+          for (const sellerId of sellerIds) {
+            const ref = supplierReferencesMap.get(sellerId)
+            if (ref) {
+              supplierReference = ref
+              break
+            }
+          }
+        }
+        
         return {
           id: odooProduct.id.toString(),
           name: odooProduct.name || 'Produit sans nom',
+          defaultCode: odooProduct.default_code || undefined, // Référence produit (ex: K3025)
+          supplierReference: odooProduct.supplier_ref || supplierReference || undefined, // Supplier Reference depuis product.template (supplier_ref) ou product.supplierinfo
           description: odooProduct.description_sale || odooProduct.description || '',
           category: category,
           basePrice: basePrice,
@@ -953,4 +1205,5 @@ export async function getProductsFromOdooREST(): Promise<Product[]> {
     return []
   }
 }
+
 

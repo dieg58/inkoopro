@@ -43,7 +43,7 @@ export function ProductMultiSelector({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>2. Sélectionnez les produits à personnaliser</CardTitle>
+            <CardTitle>Sélectionnez les produits à personnaliser</CardTitle>
             <CardDescription>
               Choisissez un ou plusieurs produits pour leur appliquer la même technique
             </CardDescription>

@@ -1,7 +1,27 @@
 import { PrismaClient } from '@prisma/client'
+import path from 'path'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
+}
+
+// Résoudre le chemin de la base de données de manière absolue pour éviter les problèmes de chemin relatif
+function getDatabaseUrl(): string {
+  const dbUrl = process.env.DATABASE_URL
+  if (!dbUrl) {
+    // Si pas de DATABASE_URL, utiliser le chemin par défaut
+    const dbPath = path.join(process.cwd(), 'prisma', 'dev.db')
+    return `file:${dbPath}`
+  }
+  
+  // Si c'est un chemin relatif (commence par file:./), le convertir en absolu
+  if (dbUrl.startsWith('file:./')) {
+    const relativePath = dbUrl.replace('file:./', '')
+    const absolutePath = path.join(process.cwd(), relativePath)
+    return `file:${absolutePath}`
+  }
+  
+  return dbUrl
 }
 
 export const prisma =
@@ -11,7 +31,7 @@ export const prisma =
     // Configuration pour SQLite avec gestion des verrous
     datasources: {
       db: {
-        url: process.env.DATABASE_URL || 'file:./prisma/dev.db',
+        url: getDatabaseUrl(),
       },
     },
   })

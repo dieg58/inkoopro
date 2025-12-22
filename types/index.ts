@@ -7,6 +7,8 @@ export type ProductCategory = 'tshirt' | 'polo' | 'sweat' | 'casquette' | 'autre
 export interface Product {
   id: string
   name: string
+  defaultCode?: string // Référence produit (ex: K3025)
+  supplierReference?: string // Référence fournisseur (Supplier Reference)
   description?: string
   image?: string
   category?: ProductCategory
@@ -31,18 +33,21 @@ export type TextileType = 'clair' | 'fonce'
 export interface SerigraphieOptions {
   textileType: TextileType // Impression sur textile clair ou foncé
   nombreCouleurs: number
-  dimension: string // Dimension du marquage (ex: "10x10cm", "15x20cm", etc.)
   nombreEmplacements: number
+  selectedOptions?: string[] // Options sélectionnées (ex: ['discharge', 'gold'])
 }
 
 export interface BroderieOptions {
   nombrePoints: number
   nombreEmplacements: number
+  embroiderySize: 'petite' | 'grande' // Petite (max 10x10cm) ou Grande (max 20x25cm)
+  isPersonalization?: boolean // Personnalisation (totem, prénom, etc.)
 }
 
 export interface DTFOptions {
   dimension: string // Dimension du marquage
   nombreEmplacements: number
+  isPersonalization?: boolean // Personnalisation (totem, prénom, etc.)
 }
 
 export type TechniqueOptions = SerigraphieOptions | BroderieOptions | DTFOptions
@@ -55,22 +60,27 @@ export interface QuantityRange {
 }
 
 // Prix pour la sérigraphie (tableau croisé: quantité × nombre de couleurs)
+// Deux tableaux de prix : un pour textile clair et un pour textile foncé
 export interface SerigraphiePricing {
   technique: 'serigraphie'
   minQuantity: number // Quantité minimum
   quantityRanges: QuantityRange[]
   colorCounts: number[] // Ex: [1, 2, 3, 4, 5, 6]
-  prices: Record<string, number> // Clé: "quantityRange-colorCount" (ex: "1-10-2" pour 1-10 pièces, 2 couleurs)
+  pricesClair: Record<string, number> // Clé: "quantityRange-colorCount" pour textile clair
+  pricesFonce: Record<string, number> // Clé: "quantityRange-colorCount" pour textile foncé
   fixedFeePerColor: number // Frais fixes par couleur (ex: 25€)
+  options: SerigraphieOption[] // Options disponibles avec leurs pourcentages
 }
 
 // Prix pour la broderie (tableau croisé: quantité × nombre de points)
+// Deux tableaux de prix : un pour petite broderie (max 10x10cm) et un pour grande broderie (max 20x25cm)
 export interface BroderiePricing {
   technique: 'broderie'
   minQuantity: number
   quantityRanges: QuantityRange[]
   pointRanges: Array<{ min: number; max: number | null; label: string }> // Ex: "0-5000", "5001-10000", etc.
-  prices: Record<string, number> // Clé: "quantityRange-pointRange" (ex: "1-10-0-5000")
+  pricesPetite: Record<string, number> // Clé: "quantityRange-pointRange" pour petite broderie (max 10x10cm)
+  pricesGrande: Record<string, number> // Clé: "quantityRange-pointRange" pour grande broderie (max 20x25cm)
   fixedFeeSmallDigitization: number // Frais fixes pour petite digitalisation (ex: 40€)
   fixedFeeLargeDigitization: number // Frais fixes pour grande digitalisation (ex: 60€)
   smallDigitizationThreshold: number // Seuil pour petite vs grande digitalisation (ex: 10000 points)
@@ -158,9 +168,11 @@ export interface SelectedProduct {
 
 // Livraison
 export type DeliveryType = 'livraison' | 'pickup'
+export type DeliveryMethod = 'pickup' | 'transporteur' | 'coursier'
 
 export interface Delivery {
   type: DeliveryType
+  method?: DeliveryMethod // Pick-Up, Transporteur, Coursier (uniquement si type = 'livraison')
   address?: {
     street: string
     city: string
@@ -174,6 +186,8 @@ export interface Delivery {
     postalCode: string
     country: string
   }
+  individualPackaging?: boolean // Emballage individuel (conditionnement sous pochette plastique)
+  newCarton?: boolean // Carton neuf (au lieu d'un carton réutilisé)
 }
 
 // Délai
@@ -189,6 +203,7 @@ export interface Delay {
 // Commande complète
 export interface Quote {
   id?: string
+  title?: string // Titre de la commande
   clientInfo?: {
     name: string
     email: string
