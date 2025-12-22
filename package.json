@@ -10,7 +10,9 @@
     "migrate": "npx prisma migrate dev",
     "migrate:deploy": "npx prisma migrate deploy",
     "db:migrate": "npx tsx scripts/migrate-to-db.ts",
-    "db:studio": "npx prisma studio"
+    "db:studio": "npx prisma studio",
+    "setup:local": "./scripts/setup-local-dev.sh",
+    "setup:prod": "cp prisma/schema.prisma.postgresql prisma/schema.prisma && npx prisma generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.6.0",

@@ -32,6 +32,9 @@ npm install
 2. Configurer les variables d'environnement :
 Créer un fichier `.env.local` à la racine du projet :
 ```
+# Base de données (SQLite pour développement local)
+DATABASE_URL="file:./prisma/dev.db"
+
 # Configuration Odoo
 NEXT_PUBLIC_ODOO_URL=https://votre-odoo.com
 NEXT_PUBLIC_ODOO_DB=votre_base_de_donnees
@@ -44,12 +47,24 @@ ADMIN_PASSWORD=votre_mot_de_passe_admin_securise
 
 **⚠️ Important** : Changez le mot de passe admin par défaut (`admin123`) en production !
 
-3. Lancer le serveur de développement :
+3. Configurer Prisma pour le développement local (SQLite) :
+```bash
+npm run setup:local
+```
+
+Cette commande configure automatiquement Prisma pour utiliser SQLite en local.
+
+4. Lancer le serveur de développement :
 ```bash
 npm run dev
 ```
 
-4. Ouvrir [http://localhost:3000](http://localhost:3000) dans votre navigateur.
+5. Ouvrir [http://localhost:3000](http://localhost:3000) dans votre navigateur.
+
+**Note :** Pour revenir à la configuration PostgreSQL (production), exécutez :
+```bash
+npm run setup:prod
+```
 
 ## Configuration Odoo
 
