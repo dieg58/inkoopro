@@ -98,7 +98,7 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
       return {
         uid: data.result.uid,
         sessionId: data.result.session_id || '',
-        password: auth.password,
+        password: ODOO_PASSWORD,
       }
     }
     return null
