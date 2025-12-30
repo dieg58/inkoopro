@@ -190,6 +190,8 @@ model ServiceOdooFeeMapping {
   odooProductName String   // Nom du produit Odoo correspondant
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@unique([mappingType, technique, feeType, optionId])
 }
 
 // Mapping des méthodes de livraison vers les références produits Odoo (default_code)
