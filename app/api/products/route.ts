@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getProductsFromDB, syncProductsFromOdoo } from '@/lib/products-db'
 import { sampleProducts } from '@/lib/data'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams

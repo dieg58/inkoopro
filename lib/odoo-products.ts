@@ -182,19 +182,15 @@ async function saveToCache(products: Product[]): Promise<void> {
 
 /**
  * Récupère les produits depuis Odoo
- * Utilise un cache quotidien pour éviter de recharger à chaque fois
- * @param forceRefresh - Force la mise à jour même si le cache est valide
+ * Le cache fichier n'est plus utilisé car non persistant sur Vercel
+ * Utilisez syncProductsFromOdoo() pour synchroniser vers la DB, puis getProductsFromDB() pour récupérer
+ * @param forceRefresh - Ignoré (conservé pour compatibilité), toujours récupère depuis Odoo
+ * @param limit - Limite optionnelle du nombre de produits à récupérer
  */
 export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?: number): Promise<Product[]> {
-  // Vérifier le cache si on ne force pas le refresh
-  if (!forceRefresh) {
-    const cachedProducts = await loadFromCache()
-    if (cachedProducts) {
-      return cachedProducts
-    }
-  } else {
-    console.log('🔄 Refresh forcé - Ignorer le cache')
-  }
+  // Le cache fichier n'est plus utilisé car il n'est pas persistant sur Vercel
+  // La DB est maintenant la source de vérité persistante
+  console.log('🔄 Récupération des produits depuis Odoo (cache fichier désactivé, utilisez la DB)')
 
   try {
     // Log des variables d'environnement (masquer les mots de passe)
@@ -1230,8 +1226,8 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
     
     console.log(`✅ ${transformedProducts.length} produit(s) créé(s) avec leurs variantes`)
     
-    // Sauvegarder dans le cache
-    await saveToCache(transformedProducts)
+    // Le cache fichier n'est plus utilisé (non persistant sur Vercel)
+    // Les produits doivent être synchronisés vers la DB via syncProductsFromOdoo()
     
     return transformedProducts
   } catch (error) {
@@ -1241,13 +1237,8 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
       console.error('   → Stack:', error.stack)
     }
     
-    // En cas d'erreur, essayer de charger depuis le cache même s'il est expiré
-    const cachedProducts = await loadFromCache()
-    if (cachedProducts) {
-      console.log('⚠️  Utilisation du cache expiré en cas d\'erreur')
-      return cachedProducts
-    }
-    
+    // Le cache fichier n'est plus utilisé, retourner un tableau vide en cas d'erreur
+    // Les produits doivent être récupérés depuis la DB via getProductsFromDB()
     return []
   }
 }

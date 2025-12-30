@@ -46,8 +46,9 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
   try {
     console.log('🔄 Synchronisation des produits depuis Odoo...', { forceRefresh, limit })
     
-    // Récupérer les produits depuis Odoo avec la limite directement dans la requête
-    const products = await getProductsFromOdoo(forceRefresh, limit)
+    // Toujours forcer le refresh pour ignorer le cache fichier (non persistant sur Vercel)
+    // La DB est la source de vérité persistante
+    const products = await getProductsFromOdoo(true, limit)
     
     if (products.length === 0) {
       console.warn('⚠️  Aucun produit récupéré depuis Odoo')
