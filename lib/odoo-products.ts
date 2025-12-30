@@ -110,8 +110,11 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
 
 /**
  * Chemin du fichier de cache
+ * Sur Vercel, utiliser /tmp car le système de fichiers est en lecture seule sauf /tmp
  */
-const CACHE_FILE_PATH = path.join(process.cwd(), '.cache', 'odoo-products.json')
+const CACHE_FILE_PATH = process.env.VERCEL
+  ? path.join('/tmp', 'odoo-products.json')
+  : path.join(process.cwd(), '.cache', 'odoo-products.json')
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000 // 24 heures
 
 /**
@@ -153,9 +156,12 @@ async function loadFromCache(): Promise<Product[] | null> {
  */
 async function saveToCache(products: Product[]): Promise<void> {
   try {
-    // Créer le dossier .cache s'il n'existe pas
+    // Créer le dossier cache s'il n'existe pas (sauf pour /tmp qui existe toujours)
     const cacheDir = path.dirname(CACHE_FILE_PATH)
-    await fs.mkdir(cacheDir, { recursive: true })
+    if (!process.env.VERCEL) {
+      // Sur Vercel, /tmp existe toujours, pas besoin de le créer
+      await fs.mkdir(cacheDir, { recursive: true })
+    }
     
     const cache: ProductsCache = {
       products,
@@ -163,10 +169,14 @@ async function saveToCache(products: Product[]): Promise<void> {
     }
     
     await fs.writeFile(CACHE_FILE_PATH, JSON.stringify(cache, null, 2), 'utf-8')
-    console.log(`💾 Cache sauvegardé: ${products.length} produits`)
+    console.log(`💾 Cache sauvegardé: ${products.length} produits (${CACHE_FILE_PATH})`)
   } catch (error) {
     console.error('⚠️  Erreur lors de la sauvegarde du cache:', error)
+    if (error instanceof Error) {
+      console.error('   → Message:', error.message)
+    }
     // Ne pas bloquer si le cache ne peut pas être sauvegardé
+    // Les produits sont stockés en base de données de toute façon
   }
 }
 
@@ -1226,6 +1236,10 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
     return transformedProducts
   } catch (error) {
     console.error('❌ Erreur lors de la récupération des produits depuis Odoo:', error)
+    if (error instanceof Error) {
+      console.error('   → Message:', error.message)
+      console.error('   → Stack:', error.stack)
+    }
     
     // En cas d'erreur, essayer de charger depuis le cache même s'il est expiré
     const cachedProducts = await loadFromCache()
