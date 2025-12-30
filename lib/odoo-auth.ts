@@ -424,9 +424,16 @@ export async function setClientSession(client: OdooClient): Promise<void> {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 jours
+      path: '/', // Important : le cookie doit être disponible sur tout le site
+    })
+    console.log('✅ Session client définie:', {
+      email: client.email,
+      name: client.name,
+      cookieSet: true,
     })
   } catch (error) {
-    console.error('Erreur lors de la définition de la session:', error)
+    console.error('❌ Erreur lors de la définition de la session:', error)
+    throw error
   }
 }
 

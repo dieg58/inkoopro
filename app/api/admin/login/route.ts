@@ -24,11 +24,25 @@ export async function POST(request: NextRequest) {
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         maxAge: 60 * 60 * 24, // 24 heures
+        path: '/', // Important : le cookie doit être disponible sur tout le site
       })
-      return NextResponse.json({
+      
+      // Créer aussi le cookie directement dans la réponse pour s'assurer qu'il est bien défini
+      const response = NextResponse.json({
         success: true,
         message: 'Authentification réussie',
       })
+      
+      // Définir le cookie dans la réponse
+      response.cookies.set('admin-auth', 'true', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24, // 24 heures
+        path: '/', // Important : le cookie doit être disponible sur tout le site
+      })
+      
+      return response
     } else {
       return NextResponse.json(
         { success: false, error: 'Mot de passe incorrect' },

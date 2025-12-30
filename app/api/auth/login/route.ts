@@ -27,6 +27,23 @@ export async function POST(request: NextRequest) {
       console.log('✅ Client trouvé dans Odoo, connexion réussie')
       // Créer la session
       await setClientSession(odooResult.client)
+      
+      // Créer aussi le cookie directement dans la réponse pour s'assurer qu'il est bien défini
+      const response = NextResponse.json({
+        success: true,
+        client: odooResult.client,
+      })
+      
+      // Définir le cookie dans la réponse
+      response.cookies.set('odoo_client', JSON.stringify(odooResult.client), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7 jours
+        path: '/', // Important : le cookie doit être disponible sur tout le site
+      })
+      
+      return response
 
       // Optionnellement, synchroniser les données dans la base locale
       try {
@@ -147,10 +164,22 @@ export async function POST(request: NextRequest) {
 
       await setClientSession(clientData)
 
-      return NextResponse.json({
+      // Créer aussi le cookie directement dans la réponse pour s'assurer qu'il est bien défini
+      const response = NextResponse.json({
         success: true,
         client: clientData,
       })
+      
+      // Définir le cookie dans la réponse
+      response.cookies.set('odoo_client', JSON.stringify(clientData), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7 jours
+        path: '/', // Important : le cookie doit être disponible sur tout le site
+      })
+      
+      return response
     }
 
     // Si aucun compte trouvé ni dans Odoo ni dans la base locale
