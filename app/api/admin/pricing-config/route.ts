@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadPricingConfig, savePricingConfig, PricingConfig } from '@/lib/pricing-config-db'
 
+// Désactiver le cache pour toujours récupérer les dernières données
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 /**
  * GET - Récupérer la configuration des facteurs de prix
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log('📥 Requête GET pour récupérer la configuration des prix')
-    const config = await loadPricingConfig()
+    // Vérifier si on doit forcer le rechargement (pour éviter le cache)
+    const searchParams = request.nextUrl.searchParams
+    const forceRefresh = searchParams.get('refresh') === 'true'
+    
+    console.log('📥 Requête GET pour récupérer la configuration des prix', { forceRefresh })
+    const config = await loadPricingConfig(forceRefresh)
     console.log('✅ Configuration chargée:', config)
     return NextResponse.json({ success: true, config })
   } catch (error) {

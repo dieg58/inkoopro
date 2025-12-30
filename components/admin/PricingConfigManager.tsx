@@ -37,8 +37,10 @@ export function PricingConfigManager() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // Timeout de 10 secondes
       
-      const response = await fetch('/api/admin/pricing-config', {
+      // Ajouter un paramètre pour forcer le rechargement et éviter le cache
+      const response = await fetch('/api/admin/pricing-config?refresh=true', {
         signal: controller.signal,
+        cache: 'no-store', // Désactiver le cache du navigateur
       })
       
       clearTimeout(timeoutId)
@@ -102,6 +104,7 @@ export function PricingConfigManager() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config }),
+        cache: 'no-store', // Désactiver le cache du navigateur
       })
       
       // Lire la réponse une seule fois
@@ -126,6 +129,8 @@ export function PricingConfigManager() {
           title: 'Succès',
           description: 'Configuration des prix sauvegardée avec succès',
         })
+        // Recharger la configuration après la sauvegarde pour afficher les dernières valeurs
+        await loadConfig()
       } else {
         const errorMsg = data.details || data.error || 'Erreur lors de la sauvegarde'
         console.error('❌ Erreur retournée par l\'API:', data)

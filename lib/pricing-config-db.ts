@@ -28,12 +28,18 @@ export const defaultPricingConfig: PricingConfig = {
 
 /**
  * Charger la configuration des facteurs de prix depuis la base de données (avec cache)
+ * @param forceRefresh - Si true, ignore le cache et recharge depuis la DB
  */
-export async function loadPricingConfig(): Promise<PricingConfig> {
-  // Vérifier le cache d'abord
-  const cached = cache.get<PricingConfig>(CACHE_KEY)
-  if (cached) {
-    return cached
+export async function loadPricingConfig(forceRefresh: boolean = false): Promise<PricingConfig> {
+  // Vérifier le cache d'abord (sauf si forceRefresh est activé)
+  if (!forceRefresh) {
+    const cached = cache.get<PricingConfig>(CACHE_KEY)
+    if (cached) {
+      return cached
+    }
+  } else {
+    // Invalider le cache si on force le rechargement
+    cache.delete(CACHE_KEY)
   }
   
   try {
