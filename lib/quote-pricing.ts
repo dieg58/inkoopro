@@ -259,12 +259,12 @@ export async function calculateQuoteTotal(
   // Calculer les frais de port
   let shippingCost = 0
   if (delivery.type === 'dpd') {
-    shippingCost = calculateShippingCostSync(selectedProducts)
+    shippingCost = calculateShippingCostSync(selectedProducts as any)
   } else if (delivery.type === 'courier' && delivery.address) {
     // Pour le coursier, utiliser la fonction async
-    shippingCost = await calculateShippingCost(selectedProducts, delivery, {
-      courierPricePerKm: config.courierPricePerKm,
-      courierMinimumFee: config.courierMinimumFee,
+    shippingCost = await calculateShippingCost(selectedProducts as any, delivery, {
+      courierPricePerKm: (config as any).courierPricePerKm,
+      courierMinimumFee: (config as any).courierMinimumFee,
     })
   }
 

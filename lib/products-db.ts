@@ -209,10 +209,10 @@ export async function searchProductsInDB(query: string): Promise<Product[]> {
     const products = await prisma.productCache.findMany({
       where: {
         OR: [
-          { name: { contains: searchTerm, mode: 'insensitive' } },
-          { defaultCode: { contains: searchTerm, mode: 'insensitive' } },
-          { supplierReference: { contains: searchTerm, mode: 'insensitive' } },
-          { description: { contains: searchTerm, mode: 'insensitive' } },
+          { name: { contains: searchTerm } },
+          { defaultCode: { contains: searchTerm } },
+          { supplierReference: { contains: searchTerm } },
+          { description: { contains: searchTerm } },
         ],
       },
       orderBy: { name: 'asc' },

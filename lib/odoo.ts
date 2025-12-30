@@ -784,7 +784,7 @@ async function findOdooProductByCode(
         default_code: product.default_code || '',
         uom_id: product.uom_id && Array.isArray(product.uom_id) ? product.uom_id[0] : null,
         uom_po_id: product.uom_po_id && Array.isArray(product.uom_po_id) ? product.uom_po_id[0] : null,
-        taxes_id: product.taxes_id && Array.isArray(product.taxes_id) ? product.taxes_id : [],
+        tax_id: (product.taxes_id && Array.isArray(product.taxes_id) ? product.taxes_id : []) as any,
         type: product.type || 'service',
         sale_ok: product.sale_ok || false,
       } as any
@@ -1842,7 +1842,7 @@ export async function createQuoteInOdoo(
       let cartonTaxId: any = false
       
       if (cartonProductCode && cartonProductCode.trim() !== '') {
-        const productInfo = await findOdooProductByCode(cartonProductCode, auth)
+        const productInfo: any = await findOdooProductByCode(cartonProductCode, auth)
         if (productInfo) {
           cartonProductId = productInfo.id
           cartonUomId = productInfo.uom_id || false
