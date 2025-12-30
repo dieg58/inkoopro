@@ -19,9 +19,10 @@ const nextConfig = {
   swcMinify: true, // Utiliser SWC pour minifier (plus rapide que Terser)
   
   // Expérimental: optimisations avancées
-  experimental: {
-    optimizeCss: true, // Optimiser le CSS
-  },
+  // Désactivé car nécessite le module 'critters' qui n'est pas installé
+  // experimental: {
+  //   optimizeCss: true, // Optimiser le CSS
+  // },
 }
 
 module.exports = withNextIntl(nextConfig)
