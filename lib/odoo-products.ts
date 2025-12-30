@@ -107,6 +107,13 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
 }
 
 /**
+ * Détecte si le code s'exécute pendant le build
+ */
+function isBuildTime(): boolean {
+  return process.env.NEXT_PHASE === 'phase-production-build' || process.env.CI === 'true'
+}
+
+/**
  * Récupère les produits depuis Odoo
  * 
  * IMPORTANT: Cette fonction ne doit PAS être appelée pendant le build.
@@ -117,13 +124,14 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
  * @param forceRefresh - Conservé pour compatibilité (toujours récupère depuis Odoo)
  * @param limit - Limite optionnelle du nombre de produits à récupérer
  */
+
 export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?: number): Promise<Product[]> {
   // Cette fonction récupère directement depuis Odoo (sans cache fichier)
   // Elle ne doit être appelée que via syncProductsFromOdoo() depuis l'API /api/products/sync
   // Les produits sont ensuite stockés en DB et récupérés via getProductsFromDB()
   
   // Protection : ne pas appeler Odoo pendant le build
-  if (process.env.NEXT_PHASE === 'phase-production-build') {
+  if (isBuildTime()) {
     console.warn('⚠️  getProductsFromOdoo() appelé pendant le build, retour d\'un tableau vide')
     console.warn('   → Les produits doivent être synchronisés via /api/products/sync depuis l\'interface admin')
     return []

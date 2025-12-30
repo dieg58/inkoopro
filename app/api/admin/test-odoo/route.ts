@@ -3,14 +3,22 @@ import { getProductsFromOdoo } from '@/lib/odoo-products'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Détecte si le code s'exécute pendant le build
+ */
+function isBuildTime(): boolean {
+  return process.env.NEXT_PHASE === 'phase-production-build' || process.env.CI === 'true'
+}
+
 export async function GET(request: NextRequest) {
   // IMPORTANT: Cette route est uniquement pour les tests manuels, jamais pendant le build
   // Si elle est appelée pendant le build, retourner immédiatement sans appeler Odoo
   // On détecte le build en vérifiant si c'est une requête runtime (avec x-vercel-id ou x-now-id) ou build time
   const isRuntimeRequest = request.headers.get('x-vercel-id') || request.headers.get('x-now-id')
-  const isBuildTime = !isRuntimeRequest && (process.env.NEXT_PHASE === 'phase-production-build' || process.env.CI)
   
-  if (isBuildTime) {
+  // Si c'est une requête runtime (avec headers Vercel), on permet l'exécution
+  // Sinon, on vérifie si on est en build time
+  if (!isRuntimeRequest && isBuildTime()) {
     // Pendant le build, retourner immédiatement sans appeler Odoo
     return NextResponse.json({
       success: false,
