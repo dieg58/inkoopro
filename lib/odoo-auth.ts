@@ -242,10 +242,44 @@ export async function verifyClientCredentials(
       return { success: false, error: 'Mot de passe incorrect' }
     }
 
-    // Récupérer le nom du pays si country_id est présent
-    let countryName = 'France' // Par défaut
-    if (partner.country_id && Array.isArray(partner.country_id) && partner.country_id.length > 1) {
-      countryName = partner.country_id[1]
+    // Récupérer le code pays si country_id est présent
+    let countryCode = 'FR' // Par défaut (France)
+    if (partner.country_id && Array.isArray(partner.country_id) && partner.country_id.length > 0) {
+      const countryId = partner.country_id[0]
+      try {
+        // Récupérer le code pays depuis res.country
+        const countryRequest = {
+          jsonrpc: '2.0',
+          method: 'call',
+          params: {
+            service: 'object',
+            method: 'execute_kw',
+            args: [
+              ODOO_DB,
+              auth.uid,
+              auth.password,
+              'res.country',
+              'read',
+              [[countryId]],
+              { fields: ['code'] },
+            ],
+          },
+        }
+
+        const countryResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(countryRequest),
+        })
+
+        const countryData = await countryResponse.json()
+        if (countryData.result && countryData.result.length > 0 && countryData.result[0].code) {
+          countryCode = countryData.result[0].code
+          console.log(`✅ Code pays récupéré: ${countryCode}`)
+        }
+      } catch (countryError) {
+        console.warn('⚠️ Erreur lors de la récupération du code pays, utilisation du défaut (FR):', countryError)
+      }
     }
 
     const client: OdooClient = {
@@ -258,7 +292,7 @@ export async function verifyClientCredentials(
       street: partner.street || undefined,
       city: partner.city || undefined,
       zip: partner.zip || undefined,
-      country: countryName,
+      country: countryCode, // Maintenant c'est le code pays (BE, FR, etc.)
     }
 
     console.log('✅ Client authentifié avec succès:', client.name)

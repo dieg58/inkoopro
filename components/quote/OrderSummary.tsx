@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { SelectedProduct, ProductSize, ServicePricing, QuantityRange, Delay, Delivery } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { delayOptions } from '@/lib/data'
 import { calculateExpressSurcharge } from '@/lib/delivery-dates'
-import { calculateShippingCost, calculateCartons } from '@/lib/shipping'
-import { Loader2 } from 'lucide-react'
+import { calculateCartons } from '@/lib/shipping'
+import { Loader2, AlertCircle } from 'lucide-react'
 
 interface Marking {
   id: string
@@ -47,6 +48,7 @@ export function OrderSummary({
   const t = useTranslations('quote')
   const summaryT = useTranslations('summary')
   const commonT = useTranslations('common')
+  const techniqueT = useTranslations('technique')
   const [servicePricing, setServicePricing] = useState<ServicePricing[]>([])
   const [pricingConfig, setPricingConfig] = useState<{
     textileDiscountPercentage: number
@@ -187,15 +189,18 @@ export function OrderSummary({
     return ''
   }
 
-  const getTotalProducts = () => {
+  // Mémoïser les calculs de totaux
+  const totalProducts = useMemo(() => {
     const allProductIds = new Set<string>()
     markings.forEach(marking => {
       marking.selectedProductIds.forEach(id => allProductIds.add(id))
     })
     return allProductIds.size
-  }
+  }, [markings])
 
-  const getTotalQuantity = () => {
+  const getTotalProducts = useCallback(() => totalProducts, [totalProducts])
+
+  const totalQuantity = useMemo(() => {
     const allProductIds = new Set<string>()
     markings.forEach(marking => {
       marking.selectedProductIds.forEach(id => allProductIds.add(id))
@@ -203,7 +208,9 @@ export function OrderSummary({
     return Array.from(allProductIds).reduce((total, productId) => {
       return total + getProductTotalQuantity(productId)
     }, 0)
-  }
+  }, [markings, selectedProducts])
+  
+  const getTotalQuantity = useCallback(() => totalQuantity, [totalQuantity])
 
   // Calculer le prix d'un produit (avec réduction textile si applicable)
   const getProductPrice = (productId: string, color: string, size: ProductSize): number => {
@@ -275,6 +282,31 @@ export function OrderSummary({
     emplacements: number
     expressSurcharge: number
     total: number
+    error?: {
+      message: string
+      minQuantity: number
+    }
+  }
+
+  // Fonction helper pour trouver la quantité minimum disponible pour un nombre de couleurs donné
+  const findMinQuantityForColorCount = (
+    colorCount: number,
+    textileType: 'clair' | 'fonce',
+    serigraphiePricing: any
+  ): number | null => {
+    const prices = textileType === 'clair' 
+      ? (serigraphiePricing.pricesClair || serigraphiePricing.prices) 
+      : (serigraphiePricing.pricesFonce || serigraphiePricing.prices)
+    
+    // Parcourir les fourchettes de quantité par ordre croissant
+    for (const range of serigraphiePricing.quantityRanges) {
+      const key = `${range.label}-${colorCount}`
+      const price = prices[key]
+      if (price !== undefined && price !== null && price > 0) {
+        return range.min
+      }
+    }
+    return null
   }
 
   // Calculer le détail du prix d'un service (unitaire + frais fixes)
@@ -309,6 +341,26 @@ export function OrderSummary({
         ? (serigraphiePricing.pricesClair || serigraphiePricing.prices) 
         : (serigraphiePricing.pricesFonce || serigraphiePricing.prices)
       const unitPrice = prices[key] || 0
+      
+      // Vérifier si le prix est disponible
+      if (unitPrice === 0 || prices[key] === undefined || prices[key] === null) {
+        const minQuantity = findMinQuantityForColorCount(colorCount, textileType, serigraphiePricing)
+        if (minQuantity !== null) {
+          const textileLabel = textileType === 'fonce' ? summaryT('darkTextile') : summaryT('lightTextile')
+          return {
+            unitPrice: 0,
+            quantity: totalQuantity,
+            fixedFees: 0,
+            emplacements: 1,
+            expressSurcharge: 0,
+            total: 0,
+            error: {
+              message: `Quantité insuffisante pour ${colorCount} couleur${colorCount > 1 ? 's' : ''} sur ${textileLabel}. Quantité minimum: ${minQuantity} pièces.`,
+              minQuantity,
+            },
+          }
+        }
+      }
       
       // Frais fixes : 25€ par couleur
       const fixedFees = (serigraphiePricing.fixedFeePerColor || 0) * colorCount
@@ -476,24 +528,68 @@ export function OrderSummary({
   // Calculer le prix total d'un service (pour compatibilité)
   const getServicePrice = (marking: Marking): number => {
     const details = getServicePriceDetails(marking)
+    // Ne pas compter les services avec erreur (prix non disponible)
+    if (details?.error) return 0
     return details?.total || 0
   }
 
-  // Calculer le total des services
-  const getServicesTotal = (): number => {
+  // Calculer le total des services (mémoïsé)
+  // Important: selectedProducts doit être dans les dépendances car getServicePriceDetails
+  // utilise getProductTotalQuantity qui lit depuis selectedProducts
+  const servicesTotal = useMemo(() => {
     return markings.reduce((total, marking) => {
       return total + getServicePrice(marking)
     }, 0)
-  }
+  }, [markings, servicePricing, selectedProducts, delay])
+  
+  const getServicesTotal = useCallback((): number => {
+    return servicesTotal
+  }, [servicesTotal])
 
   // Calculer les frais de port
-  const getShippingCost = (): number => {
-    // Les frais de port ne s'appliquent que si c'est une livraison (pas un retrait sur place)
-    if (delivery?.type === 'pickup') {
-      return 0
+  const [shippingCost, setShippingCost] = useState<number>(0)
+  const [shippingCostLoading, setShippingCostLoading] = useState(false)
+
+  useEffect(() => {
+    const calculateCost = async () => {
+      // Les frais de port ne s'appliquent que pour DPD et Coursier
+      if (delivery?.type === 'pickup' || delivery?.type === 'client_carrier') {
+        setShippingCost(0)
+        return
+      }
+      
+      setShippingCostLoading(true)
+      try {
+        // Charger la config de prix si nécessaire
+        let config = pricingConfig
+        if (!config || (!config.courierPricePerKm && delivery?.type === 'courier')) {
+          const response = await fetch('/api/pricing-config')
+          const data = await response.json()
+          if (data.success && data.config) {
+            config = {
+              courierPricePerKm: data.config.courierPricePerKm,
+              courierMinimumFee: data.config.courierMinimumFee,
+            }
+          }
+        }
+        
+        const { calculateShippingCost } = await import('@/lib/shipping')
+        const cost = await calculateShippingCost(selectedProducts, delivery, config)
+        setShippingCost(cost)
+      } catch (error) {
+        console.error('Erreur calcul frais de port:', error)
+        setShippingCost(0)
+      } finally {
+        setShippingCostLoading(false)
+      }
     }
-    return calculateShippingCost(selectedProducts)
-  }
+    
+    calculateCost()
+  }, [delivery, selectedProducts, pricingConfig])
+
+  const getShippingCost = useCallback((): number => {
+    return shippingCost
+  }, [shippingCost])
 
   // Calculer le coût de l'emballage individuel
   const getIndividualPackagingCost = (): number => {
@@ -530,6 +626,15 @@ export function OrderSummary({
     return vectorizationCount * pricingConfig.vectorizationPrice
   }
 
+  // Calculer le total du supplément express
+  const getTotalExpressSurcharge = (): number => {
+    if (!delay) return 0
+    return markings.reduce((total, marking) => {
+      const priceDetails = getServicePriceDetails(marking)
+      return total + (priceDetails?.expressSurcharge || 0)
+    }, 0)
+  }
+
   // Calculer le total général
   const getGrandTotal = (): number => {
     const productsTotal = Array.from(new Set(markings.flatMap(m => m.selectedProductIds))).reduce((total, productId) => {
@@ -540,6 +645,7 @@ export function OrderSummary({
     const packagingCost = getIndividualPackagingCost()
     const cartonCost = getNewCartonCost()
     const vectorizationCost = getVectorizationCost()
+    // Le supplément express est déjà inclus dans servicesTotal, donc on ne l'ajoute pas deux fois
     return productsTotal + servicesTotal + shippingCost + packagingCost + cartonCost + vectorizationCost
   }
 
@@ -608,7 +714,23 @@ export function OrderSummary({
               if (!marking.technique || !marking.techniqueOptions) return null
               
               const priceDetails = getServicePriceDetails(marking)
-              if (!priceDetails || priceDetails.total === 0) return null
+              if (!priceDetails) return null
+              
+              // Afficher l'erreur si le prix n'est pas disponible
+              if (priceDetails.error) {
+                return (
+                  <div key={marking.id || index} className="space-y-1">
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        {priceDetails.error.message}
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )
+              }
+              
+              if (priceDetails.total === 0) return null
               
               const techniqueName = getTechniqueName(marking.technique)
               
@@ -668,12 +790,6 @@ export function OrderSummary({
                         <span>{priceDetails.fixedFees.toFixed(2)} € HT</span>
                       </div>
                     )}
-                    {priceDetails.expressSurcharge && priceDetails.expressSurcharge > 0 && (
-                      <div className="flex justify-between text-orange-600 font-medium">
-                        <span>Supplément express</span>
-                        <span>+{priceDetails.expressSurcharge.toFixed(2)} € HT</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )
@@ -682,13 +798,13 @@ export function OrderSummary({
         )}
 
         {/* Frais de port */}
-        {delivery?.type !== 'pickup' && selectedProducts.length > 0 && (
+        {(delivery?.type === 'dpd' || delivery?.type === 'courier') && selectedProducts.length > 0 && (
           <div className="space-y-2 border-b pb-3">
             <div className="flex justify-between items-center text-sm">
               <div>
                 <span className="font-medium">{summaryT('shipping')}</span>
                 <span className="text-xs text-muted-foreground ml-2">
-                  ({getCartonsCount()} {summaryT('carton')}{getCartonsCount() > 1 ? 's' : ''} × 13,65 €)
+                  ({getCartonsCount()} {summaryT('cartonCount')}{getCartonsCount() > 1 ? 's' : ''} × 13,65 €)
                 </span>
               </div>
               <div className="font-semibold">
@@ -742,6 +858,20 @@ export function OrderSummary({
               </div>
               <div className="font-semibold">
                 {getVectorizationCost().toFixed(2)} € HT
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Supplément express total */}
+        {getTotalExpressSurcharge() > 0 && (
+          <div className="space-y-2 border-b pb-3">
+            <div className="flex justify-between items-center text-sm">
+              <div>
+                <span className="font-medium text-orange-600">Supplément express</span>
+              </div>
+              <div className="font-semibold text-orange-600">
+                +{getTotalExpressSurcharge().toFixed(2)} € HT
               </div>
             </div>
           </div>

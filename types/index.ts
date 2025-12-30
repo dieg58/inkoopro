@@ -78,7 +78,8 @@ export interface BroderiePricing {
   technique: 'broderie'
   minQuantity: number
   quantityRanges: QuantityRange[]
-  pointRanges: Array<{ min: number; max: number | null; label: string }> // Ex: "0-5000", "5001-10000", etc.
+  pointRangesPetite: Array<{ min: number; max: number | null; label: string }> // Ex: "0-5000", "5001-10000", etc. pour petite broderie
+  pointRangesGrande: Array<{ min: number; max: number | null; label: string }> // Ex: "0-5000", "5001-10000", etc. pour grande broderie
   pricesPetite: Record<string, number> // Clé: "quantityRange-pointRange" pour petite broderie (max 10x10cm)
   pricesGrande: Record<string, number> // Clé: "quantityRange-pointRange" pour grande broderie (max 20x25cm)
   fixedFeeSmallDigitization: number // Frais fixes pour petite digitalisation (ex: 40€)
@@ -167,12 +168,16 @@ export interface SelectedProduct {
 }
 
 // Livraison
-export type DeliveryType = 'livraison' | 'pickup'
-export type DeliveryMethod = 'pickup' | 'transporteur' | 'coursier'
+// Type simplifié : 4 options de livraison
+// - 'pickup' : Pick-UP (pas d'adresse de livraison)
+// - 'dpd' : Livraison via DPD (avec adresse de livraison)
+// - 'client_carrier' : Transporteur du client (pas d'adresse de livraison)
+// - 'courier' : Coursier en direct (avec adresse de livraison)
+export type DeliveryType = 'pickup' | 'dpd' | 'client_carrier' | 'courier'
 
 export interface Delivery {
   type: DeliveryType
-  method?: DeliveryMethod // Pick-Up, Transporteur, Coursier (uniquement si type = 'livraison')
+  // Adresse de livraison (requise pour 'dpd' et 'courier', non utilisée pour 'pickup' et 'client_carrier')
   address?: {
     street: string
     city: string

@@ -1,127 +1,100 @@
-// This is your Prisma schema file for SQLite (development local)
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite" // Développement local avec SQLite
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-  // Pour le développement local : DATABASE_URL="file:./prisma/dev.db"
 }
 
-// Sessions utilisateur
 model Session {
   id        String   @id @default(cuid())
   userId    String
-  userType  String   // 'admin' | 'client'
+  userType  String
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
-  
+
   @@index([token])
   @@index([userId])
 }
 
-// Clients (cache des données Odoo)
 model Client {
-  id                  String   @id @default(cuid())
-  odooId              Int?     @unique // ID dans Odoo (null si pas encore créé dans Odoo)
-  name                String
-  email               String   @unique
-  password            String?  // Hash du mot de passe (pour les nouveaux comptes)
-  company             String?
-  phone               String?
-  street              String?
-  city                String?
-  zip                 String?
-  country             String?
-  defaultDeliveryMethod String? // 'pickup' | 'transporteur' | 'coursier'
-  status              String   @default("pending") // 'pending' | 'approved' | 'rejected'
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  approvedAt          DateTime?
-  approvedBy          String?  // ID de l'admin qui a approuvé
-  
-  quotes              Quote[]
-  
+  id                    String    @id @default(cuid())
+  odooId                Int?      @unique
+  name                  String
+  email                 String    @unique
+  password              String?
+  company               String?
+  phone                 String?
+  street                String?
+  city                  String?
+  zip                   String?
+  country               String?
+  defaultDeliveryMethod String?
+  defaultDeliveryAddress Json?    // Adresse de livraison par défaut (si différente de l'adresse de facturation Odoo)
+  status                String    @default("pending")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  approvedAt            DateTime?
+  approvedBy            String?
+  quotes                Quote[]
+
   @@index([email])
   @@index([odooId])
   @@index([status])
 }
 
-// Devis/Commandes
 model Quote {
-  id              String   @id @default(cuid())
-  clientId        String
-  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  
-  // Titre du devis
-  title           String?  // Titre de la commande
-  
-  // État du devis
-  status          String   @default("draft") // draft, submitted, validated, rejected
-  step            String   @default("products") // products, customization, review
-  
-  // Informations client
-  clientName      String
-  clientEmail     String
-  clientCompany   String?
-  clientPhone     String?
-  
-  // Livraison
-  deliveryType    String   // 'livraison' | 'pickup'
-  deliveryMethod  String?  // 'pickup' | 'transporteur' | 'coursier' (uniquement si type = 'livraison')
-  deliveryAddress String?  // JSON string (SQLite ne supporte pas Json nativement)
-  billingAddressDifferent Boolean @default(false)
-  billingAddress  String?  // JSON string (SQLite ne supporte pas Json nativement)
-  individualPackaging Boolean @default(false) // Emballage individuel (conditionnement sous pochette plastique)
-  newCarton        Boolean @default(false) // Carton neuf (au lieu d'un carton réutilisé)
-  
-  // Délai
-  delayWorkingDays Int
-  delayType       String   // 'standard' | 'express'
-  delayExpressDays Int?
-  
-  // Données du devis
-  selectedProducts String   // JSON string (SQLite ne supporte pas Json nativement)
-  markings         String   // JSON string (SQLite ne supporte pas Json nativement)
-  quoteItems       String   // JSON string (SQLite ne supporte pas Json nativement)
-  
-  // Totaux
-  totalHT          Float
-  totalTTC         Float?
-  
-  // Odoo
-  odooOrderId     Int?     @unique // ID de la commande dans Odoo
-  
-  // Métadonnées
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  submittedAt     DateTime?
-  
+  id                      String    @id @default(cuid())
+  clientId                String
+  title                   String?
+  status                  String    @default("draft")
+  step                    String    @default("products")
+  clientName              String
+  clientEmail             String
+  clientCompany           String?
+  clientPhone             String?
+  deliveryType            String
+  deliveryAddress         Json?
+  billingAddressDifferent Boolean   @default(false)
+  billingAddress          Json?
+  individualPackaging     Boolean   @default(false)
+  newCarton               Boolean   @default(false)
+  delayWorkingDays        Int
+  delayType               String
+  delayExpressDays        Int?
+  selectedProducts        Json
+  markings                Json
+  quoteItems              Json
+  totalHT                 Float
+  totalTTC                Float?
+  odooOrderId             Int?      @unique
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  submittedAt             DateTime?
+  client                  Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
   @@index([clientId])
   @@index([status])
   @@index([createdAt])
 }
 
-// Cache des produits Odoo
 model ProductCache {
   id                String   @id @default(cuid())
   odooId            Int      @unique
   name              String
-  defaultCode       String?  // Référence produit (ex: K3025)
-  supplierReference String?  // Référence fournisseur (Supplier Reference)
-  description       String?  // Description du produit
+  defaultCode       String?
+  supplierReference String?
+  description       String?
   basePrice         Float
-  category          String?  // 'tshirt' | 'polo' | 'sweat' | 'casquette' | 'autre'
-  availableColors   String   // JSON string array
-  availableSizes    String   // JSON string array
-  variantPrices     String?  // JSON object
+  category          String?
+  availableColors   String
+  availableSizes    String
+  variantPrices     String?
   lastSync          DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  
+
   @@index([odooId])
   @@index([category])
   @@index([defaultCode])
@@ -129,51 +102,82 @@ model ProductCache {
   @@index([name])
 }
 
-// Configuration des prix des services
 model ServicePricing {
-  id              String   @id @default(cuid())
-  technique       String   @unique // 'serigraphie' | 'broderie' | 'dtf'
-  minQuantity     Int
-  quantityRanges  String   // JSON array
-  colorCounts     String?  // JSON array (pour sérigraphie)
-  pointRanges     String?  // JSON array (pour broderie)
-  dimensions      String?  // JSON array (pour DTF)
-  prices          String   // JSON object (cross-table prices) - pour DTF uniquement
-  pricesClair     String?  // JSON object pour sérigraphie textile clair
-  pricesFonce      String?  // JSON object pour sérigraphie textile foncé
-  pricesPetite    String?  // JSON object pour petite broderie (max 10x10cm)
-  pricesGrande    String?  // JSON object pour grande broderie (max 20x25cm)
-  fixedFeePerColor Float?  // Pour sérigraphie
-  fixedFeeSmallDigitization Float? // Pour broderie
-  fixedFeeLargeDigitization Float? // Pour broderie
-  smallDigitizationThreshold Int? // Pour broderie
-  serigraphieOptions String? // JSON array des options de sérigraphie avec pourcentages
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                         String   @id @default(cuid())
+  technique                  String   @unique
+  minQuantity                Int
+  quantityRanges             String
+  colorCounts                String?
+  pointRanges                String?  // Rétrocompatibilité (à supprimer ultérieurement)
+  pointRangesPetite          String?
+  pointRangesGrande          String?
+  dimensions                 String?
+  prices                     String
+  fixedFeePerColor           Float?
+  fixedFeeSmallDigitization  Float?
+  fixedFeeLargeDigitization  Float?
+  smallDigitizationThreshold Int?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  pricesClair                String?
+  pricesFonce                String?
+  pricesGrande               String?
+  pricesPetite               String?
+  serigraphieOptions         String?
 }
 
-// Configuration globale des prix (une seule instance)
 model PricingConfig {
-  id                      String   @id @default("singleton") // ID fixe pour garantir une seule instance
-  textileDiscountPercentage Float  @default(30)
-  clientProvidedIndexation Float   @default(10)
-  expressSurchargePercent  Float   @default(10) // 10% par jour
-  individualPackagingPrice Float   @default(0.10) // Prix par pièce pour l'emballage individuel (€ HT)
-  newCartonPrice          Float   @default(2.00) // Prix par carton pour un carton neuf (€ HT)
-  vectorizationPrice      Float   @default(25.00) // Prix pour la vectorisation d'un logo par le graphiste (€ HT)
-  updatedAt               DateTime @updatedAt
+  id                        String   @id @default("singleton")
+  textileDiscountPercentage Float    @default(30)
+  clientProvidedIndexation  Float    @default(10)
+  expressSurchargePercent   Float    @default(10)
+  individualPackagingPrice  Float    @default(0.10)
+  newCartonPrice            Float    @default(2.00)
+  vectorizationPrice        Float    @default(25.00)
+  courierPricePerKm         Float    @default(1.50) // Prix par km pour le coursier (€ HT)
+  courierMinimumFee         Float    @default(15.00) // Forfait minimum pour le coursier (€ HT)
+  updatedAt                 DateTime @updatedAt
 }
 
-// Mapping des services vers les produits Odoo
 model ServiceOdooMapping {
   id              String   @id @default(cuid())
-  technique       String   // 'serigraphie' | 'broderie' | 'dtf'
-  odooProductName String   // Nom du produit dans Odoo (ex: 'DTFTEXTILE', 'BRODERIE', 'SERIGRAPHIECLAIR')
-  // Pour sérigraphie, on peut avoir plusieurs mappings selon textileType
-  textileType     String?  // 'clair' | 'fonce' (uniquement pour sérigraphie)
+  technique       String
+  odooProductName String
+  textileType     String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
+
   @@unique([technique, textileType])
 }
 
+// Mapping des frais fixes et options vers des produits Odoo
+model ServiceOdooFeeMapping {
+  id              String   @id @default(cuid())
+  mappingType     String   // 'fixedFee' | 'option'
+  technique       String   // 'serigraphie' | 'broderie' | 'dtf'
+  feeType         String?  // Pour fixedFee: 'colorFee' (sérigraphie), 'smallDigitization' | 'largeDigitization' (broderie)
+  optionId        String?  // Pour option: l'ID de l'option (ex: 'discharge', 'gold', 'phospho')
+  odooProductName String   // Nom du produit Odoo correspondant
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([mappingType, technique, feeType, optionId])
+}
+
+// Mapping des méthodes de livraison vers les références produits Odoo (default_code)
+model DeliveryOdooMapping {
+  id              String   @id @default(cuid())
+  deliveryType    String   @unique // 'pickup' | 'dpd' | 'client_carrier' | 'courier'
+  odooProductCode String   // Référence interne (default_code) du produit Odoo
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Mapping des options (emballage individuel, cartons neufs, vectorisation) vers les références produits Odoo (default_code)
+model OptionOdooMapping {
+  id              String   @id @default(cuid())
+  optionType      String   @unique // 'individualPackaging' | 'newCarton' | 'vectorization'
+  odooProductCode String   // Référence interne (default_code) du produit Odoo
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

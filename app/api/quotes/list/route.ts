@@ -56,9 +56,10 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    console.log(`📋 Devis trouvés pour le client ${dbClient.id}:`, quotes.length)
+    console.log(`📋 Recherche des devis pour le client ${dbClient.id} (odooId: ${dbClient.odooId})`)
+    console.log(`📋 ${quotes.length} devis trouvés`)
     quotes.forEach(q => {
-      console.log(`  - ${q.id}: "${q.title}" (${q.status}) - Étape: ${q.step}`)
+      console.log(`  - ${q.id}: "${q.title || 'Sans titre'}" (${q.status}) - Étape: ${q.step} - Créé: ${q.createdAt.toISOString()} - Modifié: ${q.updatedAt.toISOString()}`)
     })
 
     return NextResponse.json({

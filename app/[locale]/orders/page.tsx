@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, ArrowLeft, Package, Calendar, Euro, FileText, Edit, Trash2 } from 'lucide-react'
+import { Loader2, ArrowLeft, Package, Calendar, Euro, FileText, Edit, Trash2, RefreshCw } from 'lucide-react'
 import { OdooOrder } from '@/lib/odoo-orders'
 import { translateOrderState, getOrderStateColor } from '@/lib/odoo-orders'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -33,8 +33,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [client, setClient] = useState<any>(null)
 
-  useEffect(() => {
-    const loadData = async () => {
+  const loadData = useCallback(async () => {
       try {
         // Vérifier l'authentification
         const clientResponse = await fetch('/api/auth/me')
@@ -66,10 +65,19 @@ export default function OrdersPage() {
         const quotesData = await quotesResponse.json()
 
         if (quotesData.success) {
-          setSavedQuotes(quotesData.quotes || [])
-          console.log('📋 Devis sauvegardés chargés:', quotesData.quotes?.length || 0)
+          const quotes = quotesData.quotes || []
+          console.log('📋 Devis sauvegardés chargés:', quotes.length)
+          quotes.forEach((q: SavedQuote) => {
+            console.log(`  - "${q.title}" (${q.id}) - ${q.status} - Étape: ${q.step}`)
+          })
+          setSavedQuotes(quotes)
         } else {
           console.warn('⚠️ Erreur chargement devis sauvegardés:', quotesData.error)
+          toast({
+            title: t('common.error'),
+            description: quotesData.error || 'Erreur lors du chargement des devis',
+            variant: 'destructive',
+          })
         }
       } catch (error) {
         console.error('Erreur chargement commandes:', error)
@@ -81,10 +89,11 @@ export default function OrdersPage() {
       } finally {
         setLoading(false)
       }
-    }
+  }, [router, toast, t])
 
+  useEffect(() => {
     loadData()
-  }, [router, toast])
+  }, [loadData])
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A'
@@ -127,6 +136,7 @@ export default function OrdersPage() {
       </div>
 
       <Tabs defaultValue="quotes" className="w-full">
+        <div className="flex justify-between items-center mb-4">
         <TabsList>
           <TabsTrigger value="quotes">
             {t('orders.savedQuotes')} ({savedQuotes.length})
@@ -135,6 +145,19 @@ export default function OrdersPage() {
             {t('orders.validatedOrders')} ({orders.length})
           </TabsTrigger>
         </TabsList>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setLoading(true)
+              loadData()
+            }}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {t('common.refresh') || 'Actualiser'}
+          </Button>
+        </div>
 
         <TabsContent value="quotes" className="space-y-4">
           {savedQuotes.length === 0 ? (
@@ -192,6 +215,18 @@ export default function OrdersPage() {
                           onClick={async () => {
                             try {
                               const response = await fetch(`/api/quotes/${quote.id}`)
+                              
+                              // Vérifier si l'utilisateur n'est pas authentifié
+                              if (response.status === 401) {
+                                toast({
+                                  title: t('common.error'),
+                                  description: 'Votre session a expiré. Veuillez vous reconnecter.',
+                                  variant: 'destructive',
+                                })
+                                router.push(`/${locale}/login`)
+                                return
+                              }
+                              
                               const data = await response.json()
                               if (data.success && data.quote) {
                                 // Sauvegarder le devis dans localStorage pour le charger
@@ -199,11 +234,11 @@ export default function OrdersPage() {
                                   quoteId: quote.id,
                                   quote: data.quote,
                                 }))
-                                router.push('/')
+                                router.push(`/${locale}/quote`)
                               } else {
                                 toast({
                                   title: t('common.error'),
-                                  description: t('orders.errorLoadingQuote'),
+                                  description: data.error || t('orders.errorLoadingQuote'),
                                   variant: 'destructive',
                                 })
                               }

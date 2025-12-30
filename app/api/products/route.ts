@@ -50,12 +50,18 @@ export async function GET(request: NextRequest) {
       source = 'sample'
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       products,
       source, // Indique la source des produits (db, db-synced, fallback, sample)
       count: products.length,
     })
+    
+    // Ajouter des headers de cache pour les produits (5 minutes)
+    // Les produits changent peu souvent, donc on peut mettre en cache
+    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    
+    return response
   } catch (error) {
     console.error('Erreur API products:', error)
     // En cas d'erreur, retourner les produits d'exemple

@@ -32,9 +32,16 @@ export async function POST(
       client,
     })
   } catch (error) {
-    console.error('Erreur API admin reject client:', error)
+    console.error('❌ Erreur API admin reject client:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    console.error('📋 Détails de l\'erreur:', errorDetails)
     return NextResponse.json(
-      { success: false, error: 'Erreur serveur' },
+      { 
+        success: false, 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
       { status: 500 }
     )
   }

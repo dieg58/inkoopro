@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     const status = request.nextUrl.searchParams.get('status') || 'pending'
+    console.log(`🔍 Recherche clients avec status: ${status}`)
 
     const clients = await prisma.client.findMany({
       where: {
@@ -30,9 +31,16 @@ export async function GET(request: NextRequest) {
       clients,
     })
   } catch (error) {
-    console.error('Erreur API admin clients pending:', error)
+    console.error('❌ Erreur API admin clients pending:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    console.error('📋 Détails de l\'erreur:', errorDetails)
     return NextResponse.json(
-      { success: false, error: 'Erreur serveur' },
+      { 
+        success: false, 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
       { status: 500 }
     )
   }

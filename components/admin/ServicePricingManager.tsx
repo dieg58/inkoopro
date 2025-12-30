@@ -45,12 +45,29 @@ export function ServicePricingManager() {
   const savePricing = async () => {
     try {
       setSaving(true)
+      console.log('💾 Sauvegarde des prix:', pricing)
+      
       const response = await fetch('/api/admin/service-pricing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pricing }),
       })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText || `Erreur HTTP ${response.status}` }
+        }
+        console.error('❌ Erreur sauvegarde prix:', errorData)
+        throw new Error(errorData.error || errorData.details || `Erreur HTTP ${response.status}`)
+      }
+
       const data = await response.json()
+      console.log('✅ Réponse sauvegarde:', data)
+      
       if (data.success) {
         toast({
           title: 'Succès',
@@ -60,10 +77,11 @@ export function ServicePricingManager() {
         throw new Error(data.error || 'Erreur lors de la sauvegarde')
       }
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error)
+      console.error('❌ Erreur complète lors de la sauvegarde:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Impossible de sauvegarder les prix'
       toast({
         title: 'Erreur',
-        description: 'Impossible de sauvegarder les prix',
+        description: errorMessage,
         variant: 'destructive',
       })
     } finally {
@@ -261,32 +279,37 @@ export function ServicePricingManager() {
     }))
   }
 
-  const addPointRange = (technique: 'broderie') => {
+  const addPointRange = (technique: 'broderie', size: 'petite' | 'grande') => {
     setPricing(prev => prev.map(p => {
       if (p.technique === technique) {
         const broderiePricing = p as BroderiePricing
-        const lastRange = broderiePricing.pointRanges[broderiePricing.pointRanges.length - 1]
+        const pointRanges = size === 'petite' ? broderiePricing.pointRangesPetite : broderiePricing.pointRangesGrande
+        const lastRange = pointRanges[pointRanges.length - 1]
         const newMin = lastRange ? (lastRange.max || lastRange.min) + 1 : 0
+        const newRange = { min: newMin, max: null, label: `${newMin}+` }
         return {
           ...broderiePricing,
-          pointRanges: [
-            ...broderiePricing.pointRanges,
-            { min: newMin, max: null, label: `${newMin}+` },
-          ],
+          pointRangesPetite: size === 'petite' 
+            ? [...pointRanges, newRange]
+            : broderiePricing.pointRangesPetite,
+          pointRangesGrande: size === 'grande'
+            ? [...pointRanges, newRange]
+            : broderiePricing.pointRangesGrande,
         }
       }
       return p
     }))
   }
 
-  const removePointRange = (technique: 'broderie', index: number) => {
+  const removePointRange = (technique: 'broderie', size: 'petite' | 'grande', index: number) => {
     setPricing(prev => prev.map(p => {
       if (p.technique === technique) {
         const broderiePricing = p as BroderiePricing
-        if (broderiePricing.pointRanges.length <= 1) return p
-        const newRanges = broderiePricing.pointRanges.filter((_, i) => i !== index)
-        // Supprimer les prix associés à cette fourchette pour les deux tableaux
-        const rangeToRemove = broderiePricing.pointRanges[index]
+        const pointRanges = size === 'petite' ? broderiePricing.pointRangesPetite : broderiePricing.pointRangesGrande
+        if (pointRanges.length <= 1) return p
+        const newRanges = pointRanges.filter((_, i) => i !== index)
+        // Supprimer les prix associés à cette fourchette pour le tableau correspondant
+        const rangeToRemove = pointRanges[index]
         
         const filterPrices = (prices: Record<string, number>) => {
           const newPrices: Record<string, number> = {}
@@ -300,9 +323,36 @@ export function ServicePricingManager() {
         
         return {
           ...broderiePricing,
-          pointRanges: newRanges,
-          pricesPetite: filterPrices(broderiePricing.pricesPetite || {}),
-          pricesGrande: filterPrices(broderiePricing.pricesGrande || {}),
+          pointRangesPetite: size === 'petite' ? newRanges : broderiePricing.pointRangesPetite,
+          pointRangesGrande: size === 'grande' ? newRanges : broderiePricing.pointRangesGrande,
+          pricesPetite: size === 'petite' ? filterPrices(broderiePricing.pricesPetite || {}) : broderiePricing.pricesPetite,
+          pricesGrande: size === 'grande' ? filterPrices(broderiePricing.pricesGrande || {}) : broderiePricing.pricesGrande,
+        }
+      }
+      return p
+    }))
+  }
+
+  const updatePointRange = (
+    technique: 'broderie',
+    size: 'petite' | 'grande',
+    index: number,
+    field: 'min' | 'max',
+    value: number | null
+  ) => {
+    setPricing(prev => prev.map(p => {
+      if (p.technique === technique) {
+        const broderiePricing = p as BroderiePricing
+        const pointRanges = size === 'petite' ? broderiePricing.pointRangesPetite : broderiePricing.pointRangesGrande
+        const newRanges = [...pointRanges]
+        newRanges[index] = { ...newRanges[index], [field]: value }
+        // Mettre à jour le label
+        newRanges[index].label = `${newRanges[index].min}${newRanges[index].max ? `-${newRanges[index].max}` : '+'}`
+        
+        return {
+          ...broderiePricing,
+          pointRangesPetite: size === 'petite' ? newRanges : broderiePricing.pointRangesPetite,
+          pointRangesGrande: size === 'grande' ? newRanges : broderiePricing.pointRangesGrande,
         }
       }
       return p
@@ -823,34 +873,26 @@ export function ServicePricingManager() {
               </div>
             </div>
 
+            {/* Fourchettes de points - Petite broderie */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label>Fourchettes de points</Label>
+                <Label>Fourchettes de points - Petite broderie</Label>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => addPointRange('broderie')}
+                  onClick={() => addPointRange('broderie', 'petite')}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Ajouter une fourchette
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2">
-                {broderiePricing.pointRanges.map((range, idx) => (
+                {broderiePricing.pointRangesPetite.map((range, idx) => (
                   <div key={idx} className="flex items-center gap-2 border rounded p-2">
                     <Input
                       type="number"
                       value={range.min}
-                      onChange={(e) => {
-                        const newRanges = [...broderiePricing.pointRanges]
-                        newRanges[idx].min = parseInt(e.target.value) || 0
-                        newRanges[idx].label = `${newRanges[idx].min}${newRanges[idx].max ? `-${newRanges[idx].max}` : '+'}`
-                        setPricing(prev => prev.map(p => 
-                          p.technique === 'broderie' 
-                            ? { ...p, pointRanges: newRanges }
-                            : p
-                        ))
-                      }}
+                      onChange={(e) => updatePointRange('broderie', 'petite', idx, 'min', parseInt(e.target.value) || 0)}
                       className="w-24"
                     />
                     <span>-</span>
@@ -858,23 +900,58 @@ export function ServicePricingManager() {
                       type="number"
                       value={range.max || ''}
                       placeholder="∞"
-                      onChange={(e) => {
-                        const newRanges = [...broderiePricing.pointRanges]
-                        newRanges[idx].max = e.target.value ? parseInt(e.target.value) : null
-                        newRanges[idx].label = `${newRanges[idx].min}${newRanges[idx].max ? `-${newRanges[idx].max}` : '+'}`
-                        setPricing(prev => prev.map(p => 
-                          p.technique === 'broderie' 
-                            ? { ...p, pointRanges: newRanges }
-                            : p
-                        ))
-                      }}
+                      onChange={(e) => updatePointRange('broderie', 'petite', idx, 'max', e.target.value ? parseInt(e.target.value) : null)}
                       className="w-24"
                     />
-                    {broderiePricing.pointRanges.length > 1 && (
+                    {broderiePricing.pointRangesPetite.length > 1 && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => removePointRange('broderie', idx)}
+                        onClick={() => removePointRange('broderie', 'petite', idx)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Fourchettes de points - Grande broderie */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Fourchettes de points - Grande broderie</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addPointRange('broderie', 'grande')}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Ajouter une fourchette
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {broderiePricing.pointRangesGrande.map((range, idx) => (
+                  <div key={idx} className="flex items-center gap-2 border rounded p-2">
+                    <Input
+                      type="number"
+                      value={range.min}
+                      onChange={(e) => updatePointRange('broderie', 'grande', idx, 'min', parseInt(e.target.value) || 0)}
+                      className="w-24"
+                    />
+                    <span>-</span>
+                    <Input
+                      type="number"
+                      value={range.max || ''}
+                      placeholder="∞"
+                      onChange={(e) => updatePointRange('broderie', 'grande', idx, 'max', e.target.value ? parseInt(e.target.value) : null)}
+                      className="w-24"
+                    />
+                    {broderiePricing.pointRangesGrande.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removePointRange('broderie', 'grande', idx)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -893,7 +970,7 @@ export function ServicePricingManager() {
                     <thead>
                       <tr className="bg-muted">
                         <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Points</th>
-                        {broderiePricing.pointRanges.map(range => (
+                        {broderiePricing.pointRangesPetite.map(range => (
                           <th key={range.label} className="border p-2 text-center min-w-[120px]">
                             {range.label}
                           </th>
@@ -906,7 +983,7 @@ export function ServicePricingManager() {
                           <td className="border p-2 font-medium sticky left-0 bg-background">
                             {range.label}
                           </td>
-                          {broderiePricing.pointRanges.map(pointRange => {
+                          {broderiePricing.pointRangesPetite.map(pointRange => {
                             const key = `${range.label}-${pointRange.label}`
                             return (
                               <td key={pointRange.label} className="border p-1">
@@ -915,7 +992,7 @@ export function ServicePricingManager() {
                                   step="0.01"
                                   min="0"
                                   value={broderiePricing.pricesPetite?.[key] || ''}
-                                  onChange={(e) => updatePrice('broderie', key, parseFloat(e.target.value) || 0, 'petite')}
+                                  onChange={(e) => updatePrice('broderie', key, parseFloat(e.target.value) || 0, undefined, 'petite')}
                                   placeholder="0.00"
                                   className="w-full text-center"
                                 />
@@ -937,7 +1014,7 @@ export function ServicePricingManager() {
                     <thead>
                       <tr className="bg-muted">
                         <th className="border p-2 text-left sticky left-0 bg-muted">Quantité / Points</th>
-                        {broderiePricing.pointRanges.map(range => (
+                        {broderiePricing.pointRangesGrande.map(range => (
                           <th key={range.label} className="border p-2 text-center min-w-[120px]">
                             {range.label}
                           </th>
@@ -950,7 +1027,7 @@ export function ServicePricingManager() {
                           <td className="border p-2 font-medium sticky left-0 bg-background">
                             {range.label}
                           </td>
-                          {broderiePricing.pointRanges.map(pointRange => {
+                          {broderiePricing.pointRangesGrande.map(pointRange => {
                             const key = `${range.label}-${pointRange.label}`
                             return (
                               <td key={pointRange.label} className="border p-1">
@@ -959,7 +1036,7 @@ export function ServicePricingManager() {
                                   step="0.01"
                                   min="0"
                                   value={broderiePricing.pricesGrande?.[key] || ''}
-                                  onChange={(e) => updatePrice('broderie', key, parseFloat(e.target.value) || 0, 'grande')}
+                                  onChange={(e) => updatePrice('broderie', key, parseFloat(e.target.value) || 0, undefined, 'grande')}
                                   placeholder="0.00"
                                   className="w-full text-center"
                                 />

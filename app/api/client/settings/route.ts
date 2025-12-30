@@ -40,6 +40,12 @@ export async function GET(request: NextRequest) {
       success: true,
       settings: {
         defaultDeliveryMethod: dbClient.defaultDeliveryMethod,
+        defaultDeliveryAddress: dbClient.defaultDeliveryAddress as {
+          street: string
+          city: string
+          postalCode: string
+          country: string
+        } | null,
       },
     })
   } catch (error) {
@@ -65,12 +71,20 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { defaultDeliveryMethod } = body
+    const { defaultDeliveryMethod, defaultDeliveryAddress } = body
 
     // Normaliser la valeur : convertir chaîne vide ou "none" en null
     const normalizedMethod = !defaultDeliveryMethod || defaultDeliveryMethod === '' || defaultDeliveryMethod === 'none' 
       ? null 
       : defaultDeliveryMethod
+
+    // Normaliser l'adresse de livraison : null si non fournie ou vide
+    const normalizedAddress = defaultDeliveryAddress && 
+      defaultDeliveryAddress.street && 
+      defaultDeliveryAddress.city && 
+      defaultDeliveryAddress.postalCode
+      ? defaultDeliveryAddress
+      : null
 
     // Trouver ou créer le client dans la DB
     let dbClient = await prisma.client.findUnique({
@@ -90,6 +104,7 @@ export async function PUT(request: NextRequest) {
           zip: client.zip,
           country: client.country,
           defaultDeliveryMethod: normalizedMethod,
+          defaultDeliveryAddress: normalizedAddress,
         },
       })
     } else {
@@ -98,6 +113,7 @@ export async function PUT(request: NextRequest) {
         where: { id: dbClient.id },
         data: {
           defaultDeliveryMethod: normalizedMethod,
+          defaultDeliveryAddress: normalizedAddress,
         },
       })
     }
@@ -106,6 +122,12 @@ export async function PUT(request: NextRequest) {
       success: true,
       settings: {
         defaultDeliveryMethod: dbClient.defaultDeliveryMethod,
+        defaultDeliveryAddress: dbClient.defaultDeliveryAddress as {
+          street: string
+          city: string
+          postalCode: string
+          country: string
+        } | null,
       },
     })
   } catch (error) {

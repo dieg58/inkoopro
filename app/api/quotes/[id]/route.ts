@@ -55,12 +55,14 @@ export async function GET(
         step: quote.step,
         selectedProducts: quote.selectedProducts,
         quoteItems: quote.quoteItems,
+        markings: quote.markings,
         currentMarkings: quote.markings,
         delivery: {
           type: quote.deliveryType,
           address: quote.deliveryAddress,
-          billingAddressDifferent: quote.billingAddressDifferent,
           billingAddress: quote.billingAddress,
+          individualPackaging: quote.individualPackaging || false,
+          newCarton: quote.newCarton || false,
         },
         delay: {
           type: quote.delayType,

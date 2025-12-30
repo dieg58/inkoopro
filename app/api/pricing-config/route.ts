@@ -7,7 +7,12 @@ import { loadPricingConfig } from '@/lib/pricing-config-db'
 export async function GET() {
   try {
     const config = await loadPricingConfig()
-    return NextResponse.json({ success: true, config })
+    const response = NextResponse.json({ success: true, config })
+    
+    // Cache la configuration (5 minutes) - elle change peu souvent
+    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    
+    return response
   } catch (error) {
     console.error('Erreur lors de la récupération de la configuration:', error)
     return NextResponse.json(

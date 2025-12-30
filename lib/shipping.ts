@@ -1,4 +1,4 @@
-import { SelectedProduct } from '@/types'
+import { SelectedProduct, Delivery } from '@/types'
 
 /**
  * Capacité d'un carton par type de produit
@@ -75,8 +75,48 @@ export function calculateCartons(selectedProducts: SelectedProduct[]): number {
 
 /**
  * Calcule les frais de port en fonction du nombre de cartons
+ * Pour le coursier, utilise la distance et les tarifs configurés
  */
-export function calculateShippingCost(selectedProducts: SelectedProduct[]): number {
+export async function calculateShippingCost(
+  selectedProducts: SelectedProduct[],
+  delivery?: Delivery,
+  pricingConfig?: {
+    courierPricePerKm?: number
+    courierMinimumFee?: number
+  }
+): Promise<number> {
+  // Si c'est un coursier et qu'on a une adresse + config de prix
+  if (delivery?.type === 'courier' && delivery.address && pricingConfig) {
+    const { calculateDistanceToWarehouse } = await import('./distance')
+    
+    try {
+      const result = await calculateDistanceToWarehouse(delivery.address)
+      
+      if (result.distance > 0 && !result.error) {
+        const pricePerKm = pricingConfig.courierPricePerKm || 1.50
+        const minimumFee = pricingConfig.courierMinimumFee || 15.00
+        
+        const calculatedPrice = result.distance * pricePerKm
+        // Appliquer le forfait minimum
+        return Math.max(calculatedPrice, minimumFee)
+      }
+    } catch (error) {
+      console.error('Erreur calcul frais coursier:', error)
+      // En cas d'erreur, retourner le forfait minimum
+      return pricingConfig.courierMinimumFee || 15.00
+    }
+  }
+  
+  // Pour DPD et autres, calculer selon les cartons
+  const cartons = calculateCartons(selectedProducts)
+  return cartons * CARTON_PRICE
+}
+
+/**
+ * Version synchrone (pour compatibilité avec le code existant)
+ * Pour le coursier, retourne 0 car nécessite un calcul asynchrone
+ */
+export function calculateShippingCostSync(selectedProducts: SelectedProduct[]): number {
   const cartons = calculateCartons(selectedProducts)
   return cartons * CARTON_PRICE
 }

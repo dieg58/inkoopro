@@ -189,6 +189,7 @@
     "shipping": "Frais de port",
     "packaging": "Emballage individuel",
     "carton": "Carton neuf",
+    "cartonCount": "carton",
     "vectorization": "Vectorisation logo",
     "logo": "logo",
     "lightTextile": "Textile clair",

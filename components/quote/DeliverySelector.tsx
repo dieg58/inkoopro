@@ -2,37 +2,44 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
-import { Delivery, Delay } from '@/types'
+import { Delivery } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
-import { delayOptions } from '@/lib/data'
-import { Edit2, Check, X, AlertCircle } from 'lucide-react'
-import { getIndicationDate, getDeliveryDate, formatDate, formatDateShort, calculateExpressSurcharge } from '@/lib/delivery-dates'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Edit2, Loader2, Check, X } from 'lucide-react'
+import { AVAILABLE_COUNTRIES } from '@/lib/distance'
 
 interface DeliverySelectorProps {
   delivery: Delivery
   onDeliveryChange: (delivery: Delivery) => void
-  delay: Delay
-  onDelayChange: (delay: Delay) => void
 }
 
 export function DeliverySelector({
   delivery,
   onDeliveryChange,
-  delay,
-  onDelayChange,
 }: DeliverySelectorProps) {
   const t = useTranslations('delivery')
   const commonT = useTranslations('common')
   const [isEditingAddress, setIsEditingAddress] = useState(false)
   const [editedAddress, setEditedAddress] = useState(delivery.address)
-  const [isEditingBillingAddress, setIsEditingBillingAddress] = useState(false)
-  const [editedBillingAddress, setEditedBillingAddress] = useState(delivery.billingAddress)
+  const [billingAddressFromOdoo, setBillingAddressFromOdoo] = useState<{
+    street: string
+    city: string
+    postalCode: string
+    country: string
+  } | null>(null)
+  const [courierDistance, setCourierDistance] = useState<number | null>(null)
+  const [courierDistanceLoading, setCourierDistanceLoading] = useState(false)
+  const [courierPrice, setCourierPrice] = useState<number | null>(null)
+  const [pricingConfig, setPricingConfig] = useState<{
+    courierPricePerKm?: number
+    courierMinimumFee?: number
+  }>({
+    courierPricePerKm: undefined,
+    courierMinimumFee: undefined,
+  })
 
   // Synchroniser editedAddress quand delivery.address change (si on n'est pas en mode édition)
   useEffect(() => {
@@ -41,12 +48,130 @@ export function DeliverySelector({
     }
   }, [delivery.address, isEditingAddress])
 
-  // Synchroniser editedBillingAddress quand delivery.billingAddress change (si on n'est pas en mode édition)
+  // Charger l'adresse de facturation depuis Odoo et l'adresse de livraison par défaut depuis les settings
   useEffect(() => {
-    if (!isEditingBillingAddress) {
-      setEditedBillingAddress(delivery.billingAddress)
+    const loadAddresses = async () => {
+      try {
+        // Charger l'adresse de facturation depuis Odoo
+        const clientResponse = await fetch('/api/auth/me')
+        const clientData = await clientResponse.json()
+        let billingAddress: { street: string; city: string; postalCode: string; country: string } | null = null
+        
+        if (clientData.success && clientData.client) {
+          const client = clientData.client
+          if (client.street && client.city && client.zip && client.country) {
+            billingAddress = {
+              street: client.street,
+              city: client.city,
+              postalCode: client.zip,
+              country: client.country || 'FR', // Code pays (BE, FR, etc.)
+            }
+            setBillingAddressFromOdoo(billingAddress)
+            // Mettre à jour delivery avec l'adresse de facturation d'Odoo
+            onDeliveryChange({
+              ...delivery,
+              billingAddress: billingAddress,
+            })
+          }
+        }
+
+        // Charger l'adresse de livraison par défaut depuis les settings
+        const settingsResponse = await fetch('/api/client/settings')
+        const settingsData = await settingsResponse.json()
+        if (settingsData.success && settingsData.settings) {
+          const defaultDeliveryAddress = settingsData.settings.defaultDeliveryAddress as {
+            street: string
+            city: string
+            postalCode: string
+            country: string
+          } | null
+
+          // Utiliser l'adresse personnalisée si elle existe, sinon utiliser l'adresse de facturation
+          const addressToUse = defaultDeliveryAddress || billingAddress
+
+          // Si l'adresse de livraison n'est pas encore définie dans delivery, utiliser l'adresse par défaut
+          // On vérifie aussi si delivery.address existe déjà pour ne pas écraser une adresse déjà saisie
+          if (addressToUse && (!delivery.address || !delivery.address.street || !delivery.address.city)) {
+            onDeliveryChange({
+              ...delivery,
+              address: addressToUse,
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Erreur chargement adresses:', error)
+      }
     }
-  }, [delivery.billingAddress, isEditingBillingAddress])
+    loadAddresses()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Seulement au montage
+
+  // Charger la configuration des prix pour le coursier
+  useEffect(() => {
+    const loadPricingConfig = async () => {
+      try {
+        const response = await fetch('/api/pricing-config')
+        const data = await response.json()
+        if (data.success && data.config) {
+          setPricingConfig({
+            courierPricePerKm: data.config.courierPricePerKm,
+            courierMinimumFee: data.config.courierMinimumFee,
+          })
+        }
+      } catch (error) {
+        console.error('Erreur chargement config prix:', error)
+      }
+    }
+    loadPricingConfig()
+  }, [])
+
+  // Calculer la distance et le prix pour le coursier quand l'adresse change
+  const calculateCourierDistance = async () => {
+    if (!delivery.address) return
+    
+    setCourierDistanceLoading(true)
+    try {
+      const response = await fetch('/api/distance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: delivery.address }),
+      })
+      
+      const data = await response.json()
+      
+      if (data.success && data.distance) {
+        const distance = data.distance
+        setCourierDistance(distance)
+        
+        // Calculer le prix
+        const pricePerKm = pricingConfig.courierPricePerKm || 1.50
+        const minimumFee = pricingConfig.courierMinimumFee || 15.00
+        
+        const calculatedPrice = distance * pricePerKm
+        const finalPrice = Math.max(calculatedPrice, minimumFee)
+        setCourierPrice(finalPrice)
+      } else {
+        setCourierDistance(null)
+        setCourierPrice(null)
+      }
+    } catch (error) {
+      console.error('Erreur calcul distance coursier:', error)
+      setCourierDistance(null)
+      setCourierPrice(null)
+    } finally {
+      setCourierDistanceLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (delivery.type === 'courier' && delivery.address?.street && delivery.address?.city && delivery.address?.postalCode && pricingConfig) {
+      calculateCourierDistance()
+    } else {
+      setCourierDistance(null)
+      setCourierPrice(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [delivery.type, delivery.address?.street, delivery.address?.city, delivery.address?.postalCode, pricingConfig])
 
   // Vérifier si l'adresse est complète (pré-remplie depuis Odoo)
   const hasCompleteAddress = delivery.address?.street && delivery.address?.city && delivery.address?.postalCode
@@ -56,7 +181,7 @@ export function DeliverySelector({
       street: '',
       city: '',
       postalCode: '',
-      country: 'France',
+      country: 'FR',
     })
     setIsEditingAddress(true)
   }
@@ -74,39 +199,6 @@ export function DeliverySelector({
     setIsEditingAddress(false)
   }
 
-  const handleEditBillingAddress = () => {
-    // Utiliser billingAddress si différent, sinon utiliser address
-    const addressToEdit = delivery.billingAddressDifferent 
-      ? delivery.billingAddress 
-      : delivery.address
-    setEditedBillingAddress(addressToEdit || {
-      street: '',
-      city: '',
-      postalCode: '',
-      country: 'France',
-    })
-    setIsEditingBillingAddress(true)
-  }
-
-  const handleSaveBillingAddress = () => {
-    onDeliveryChange({
-      ...delivery,
-      billingAddress: editedBillingAddress,
-    })
-    setIsEditingBillingAddress(false)
-  }
-
-  const handleCancelEditBilling = () => {
-    setEditedBillingAddress(delivery.billingAddress)
-    setIsEditingBillingAddress(false)
-  }
-
-  // Vérifier si l'adresse de facturation est complète
-  // Si billingAddressDifferent est false, utiliser l'adresse de livraison
-  const billingAddressToCheck = delivery.billingAddressDifferent 
-    ? delivery.billingAddress 
-    : delivery.address
-  const hasCompleteBillingAddress = billingAddressToCheck?.street && billingAddressToCheck?.city && billingAddressToCheck?.postalCode
 
   return (
     <div className="space-y-4">
@@ -118,50 +210,33 @@ export function DeliverySelector({
             <Label>{t('deliveryType')}</Label>
             <Select
               value={delivery.type}
-              onValueChange={(value) =>
+              onValueChange={(value) => {
+                const newType = value as 'pickup' | 'dpd' | 'client_carrier' | 'courier'
+                // Réinitialiser l'adresse si ce n'est pas nécessaire pour ce type
+                const needsAddress = newType === 'dpd' || newType === 'courier'
                 onDeliveryChange({
                   ...delivery,
-                  type: value as 'livraison' | 'pickup',
-                  // Si Pick-Up, pas besoin de méthode de livraison
-                  method: value === 'pickup' ? undefined : delivery.method,
+                  type: newType,
+                  // Supprimer l'adresse si elle n'est pas nécessaire
+                  address: needsAddress ? delivery.address : undefined,
                 })
-              }
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="livraison">{t('delivery')}</SelectItem>
-                <SelectItem value="pickup">{t('pickup')}</SelectItem>
+                <SelectItem value="pickup">Pick-UP</SelectItem>
+                <SelectItem value="dpd">Livraison via DPD</SelectItem>
+                <SelectItem value="client_carrier">Transporteur du client</SelectItem>
+                <SelectItem value="courier">Coursier en direct</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {delivery.type === 'livraison' && (
+          {/* Afficher l'adresse uniquement pour DPD et Coursier */}
+          {(delivery.type === 'dpd' || delivery.type === 'courier') && (
             <div className="space-y-4 pt-4 border-t">
-              {/* Méthode de livraison */}
-              <div className="space-y-2">
-                <Label>{t('method')}</Label>
-                <Select
-                  value={delivery.method || 'transporteur'}
-                  onValueChange={(value) =>
-                    onDeliveryChange({
-                      ...delivery,
-                      method: value as 'pickup' | 'transporteur' | 'coursier',
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pickup">{t('pickup')}</SelectItem>
-                    <SelectItem value="transporteur">{t('carrier')}</SelectItem>
-                    <SelectItem value="coursier">{t('courier')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {hasCompleteAddress && !isEditingAddress ? (
                 // Mode affichage avec bouton d'édition
                 <div className="space-y-3">
@@ -218,7 +293,7 @@ export function DeliverySelector({
                           street: e.target.value,
                           city: editedAddress?.city || '',
                           postalCode: editedAddress?.postalCode || '',
-                          country: editedAddress?.country || 'France',
+                          country: editedAddress?.country || 'FR',
                         })
                       }
                       placeholder={t('street')}
@@ -235,7 +310,7 @@ export function DeliverySelector({
                             postalCode: e.target.value,
                             street: editedAddress?.street || '',
                             city: editedAddress?.city || '',
-                            country: editedAddress?.country || 'France',
+                            country: editedAddress?.country || 'FR',
                           })
                         }
                         placeholder={t('postalCode')}
@@ -251,7 +326,7 @@ export function DeliverySelector({
                             city: e.target.value,
                             street: editedAddress?.street || '',
                             postalCode: editedAddress?.postalCode || '',
-                            country: editedAddress?.country || 'France',
+                            country: editedAddress?.country || 'FR',
                           })
                         }
                         placeholder={t('city')}
@@ -260,369 +335,92 @@ export function DeliverySelector({
                   </div>
                   <div className="space-y-2">
                     <Label>{t('country')}</Label>
-                    <Input
-                      value={editedAddress?.country || 'France'}
-                      onChange={(e) =>
+                    <Select
+                      value={editedAddress?.country || 'FR'}
+                      onValueChange={(value) =>
                         setEditedAddress({
                           ...editedAddress,
-                          country: e.target.value,
+                          country: value,
                           street: editedAddress?.street || '',
                           city: editedAddress?.city || '',
                           postalCode: editedAddress?.postalCode || '',
                         })
                       }
-                      placeholder={t('country')}
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(AVAILABLE_COUNTRIES).map(([code, name]) => (
+                          <SelectItem key={code} value={code}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {!hasCompleteAddress && (
                     <Button onClick={handleSaveAddress} className="w-full">
                       {commonT('save')} {t('address')}
                     </Button>
                   )}
-                </div>
-              )}
-
-              {/* Section adresse de facturation */}
-              <div className="pt-4 border-t">
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="billingAddressDifferent"
-                      checked={delivery.billingAddressDifferent || false}
-                      onChange={(e) => {
-                        onDeliveryChange({
-                          ...delivery,
-                          billingAddressDifferent: e.target.checked,
-                          // Si on décoche, utiliser l'adresse de livraison comme adresse de facturation
-                          billingAddress: e.target.checked ? delivery.billingAddress : delivery.address,
-                        })
-                      }}
-                      className="h-4 w-4 rounded border-gray-300"
-                    />
-                    <Label htmlFor="billingAddressDifferent" className="cursor-pointer">
-                      {t('billingAddressDifferent')}
-                    </Label>
-                  </div>
-
-                  {/* Afficher l'adresse de facturation (toujours visible) */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">{t('billingAddress')}</Label>
-                    {(() => {
-                      // Déterminer quelle adresse afficher
-                      const addressToShow = !delivery.billingAddressDifferent 
-                        ? delivery.address 
-                        : delivery.billingAddress
-                      
-                      // Vérifier si l'adresse est vide ou incomplète
-                      const hasAddress = addressToShow && (addressToShow.street || addressToShow.city || addressToShow.postalCode)
-                      
-                      if (!hasAddress) {
-                        // Pas d'adresse disponible
-                        return (
-                          <div className="bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-md text-sm text-muted-foreground">
-                            Aucune adresse de facturation disponible. Veuillez remplir l'adresse de livraison d'abord.
+                  
+                  {/* Affichage de la distance et du prix pour le coursier */}
+                  {delivery.type === 'courier' && hasCompleteAddress && (
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+                      {courierDistanceLoading ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Calcul de la distance en cours...</span>
+                        </div>
+                      ) : courierDistance !== null && courierPrice !== null ? (
+                        <div className="space-y-1 text-sm">
+                          <div className="font-medium">
+                            Distance : {courierDistance} km
                           </div>
-                        )
-                      }
-                      
-                      if (!delivery.billingAddressDifferent) {
-                        // Si identique, afficher l'adresse avec indication et possibilité de modifier
-                        return (
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md space-y-1">
-                                  <p className="font-medium">{addressToShow.street || t('notProvided')}</p>
-                                  <p>{addressToShow.postalCode || ''} {addressToShow.city || ''}</p>
-                                  <p className="text-sm text-gray-600">{addressToShow.country || 'France'}</p>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                  {t('sameAsDelivery')}
-                                </p>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  // Cocher la checkbox et passer en mode édition
-                                  const newBillingAddress = delivery.billingAddress || delivery.address
-                                  setEditedBillingAddress(newBillingAddress || {
-                                    street: '',
-                                    city: '',
-                                    postalCode: '',
-                                    country: 'France',
-                                  })
-                                  setIsEditingBillingAddress(true)
-                                  onDeliveryChange({
-                                    ...delivery,
-                                    billingAddressDifferent: true,
-                                    billingAddress: newBillingAddress,
-                                  })
-                                }}
-                                className="ml-2"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        )
-                      }
-                      
-                      // Si différente, afficher normalement
-                      return hasCompleteBillingAddress && !isEditingBillingAddress ? (
-                        // Mode affichage avec bouton d'édition
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md space-y-1">
-                                <p className="font-medium">{delivery.billingAddress?.street}</p>
-                                <p>{delivery.billingAddress?.postalCode} {delivery.billingAddress?.city}</p>
-                                <p className="text-sm text-gray-600">{delivery.billingAddress?.country}</p>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleEditBillingAddress}
-                              className="ml-2"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
+                          <div className="text-muted-foreground">
+                            Frais de livraison : {courierPrice.toFixed(2)} € HT
+                            {courierPrice === (pricingConfig.courierMinimumFee || 15.00) && (
+                              <span className="ml-2 text-xs">(forfait minimum)</span>
+                            )}
                           </div>
                         </div>
                       ) : (
-                      // Mode édition
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          {hasCompleteBillingAddress && isEditingBillingAddress && (
-                            <div className="flex gap-2 ml-auto">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleSaveBillingAddress}
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleCancelEditBilling}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
+                        <div className="text-sm text-muted-foreground">
+                          Impossible de calculer la distance. Vérifiez que l'adresse est complète.
                         </div>
-                        <div className="space-y-2">
-                          <Label>{t('street')}</Label>
-                          <Input
-                            value={editedBillingAddress?.street || ''}
-                            onChange={(e) =>
-                              setEditedBillingAddress({
-                                ...editedBillingAddress,
-                                street: e.target.value,
-                                city: editedBillingAddress?.city || '',
-                                postalCode: editedBillingAddress?.postalCode || '',
-                                country: editedBillingAddress?.country || 'France',
-                              })
-                            }
-                            placeholder={t('street')}
-                          />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Section adresse de facturation (depuis Odoo) */}
+              <div className="pt-4 border-t">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">{t('billingAddress')}</Label>
+                    {billingAddressFromOdoo ? (
+                                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md space-y-1">
+                        <p className="font-medium">{billingAddressFromOdoo.street}</p>
+                        <p>{billingAddressFromOdoo.postalCode} {billingAddressFromOdoo.city}</p>
+                        <p className="text-sm text-gray-600">
+                          {AVAILABLE_COUNTRIES[billingAddressFromOdoo.country] || billingAddressFromOdoo.country}
+                        </p>
+                                <p className="text-xs text-muted-foreground mt-2">
+                          Adresse de facturation provenant de votre compte Odoo
+                        </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>{t('postalCode')}</Label>
-                            <Input
-                              value={editedBillingAddress?.postalCode || ''}
-                              onChange={(e) =>
-                                setEditedBillingAddress({
-                                  ...editedBillingAddress,
-                                  postalCode: e.target.value,
-                                  street: editedBillingAddress?.street || '',
-                                  city: editedBillingAddress?.city || '',
-                                  country: editedBillingAddress?.country || 'France',
-                                })
-                              }
-                              placeholder={t('postalCode')}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{t('city')}</Label>
-                            <Input
-                              value={editedBillingAddress?.city || ''}
-                              onChange={(e) =>
-                                setEditedBillingAddress({
-                                  ...editedBillingAddress,
-                                  city: e.target.value,
-                                  street: editedBillingAddress?.street || '',
-                                  postalCode: editedBillingAddress?.postalCode || '',
-                                  country: editedBillingAddress?.country || 'France',
-                                })
-                              }
-                              placeholder={t('city')}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{t('country')}</Label>
-                          <Input
-                            value={editedBillingAddress?.country || 'France'}
-                            onChange={(e) =>
-                              setEditedBillingAddress({
-                                ...editedBillingAddress,
-                                country: e.target.value,
-                                street: editedBillingAddress?.street || '',
-                                city: editedBillingAddress?.city || '',
-                                postalCode: editedBillingAddress?.postalCode || '',
-                              })
-                            }
-                            placeholder={t('country')}
-                          />
-                        </div>
-                        {!hasCompleteBillingAddress && (
-                          <Button onClick={handleSaveBillingAddress} className="w-full">
-                            {commonT('save')} {t('billingAddress')}
-                          </Button>
-                        )}
+                      ) : (
+                      <div className="bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-md text-sm text-muted-foreground">
+                        Chargement de l'adresse de facturation depuis votre compte Odoo...
                       </div>
-                      )
-                    })()}
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Options d'emballage */}
-              <div className="pt-4 border-t space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="individualPackaging"
-                    checked={delivery.individualPackaging || false}
-                    onCheckedChange={(checked) => {
-                      onDeliveryChange({
-                        ...delivery,
-                        individualPackaging: checked === true,
-                      })
-                    }}
-                  />
-                  <Label
-                    htmlFor="individualPackaging"
-                    className="text-sm font-normal cursor-pointer flex-1"
-                  >
-                    {t('individualPackaging')}
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground ml-6">
-                  {t('individualPackagingDescription')}
-                </p>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="newCarton"
-                    checked={delivery.newCarton || false}
-                    onCheckedChange={(checked) => {
-                      onDeliveryChange({
-                        ...delivery,
-                        newCarton: checked === true,
-                      })
-                    }}
-                  />
-                  <Label
-                    htmlFor="newCarton"
-                    className="text-sm font-normal cursor-pointer flex-1"
-                  >
-                    {t('newCarton')}
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground ml-6">
-                  {t('newCartonDescription')}
-                </p>
-              </div>
-
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-          <div className="space-y-2">
-            <Label>{t('delay')}</Label>
-            <Select
-              value={delay.isExpress ? 'express' : `${delay.workingDays}`}
-              onValueChange={(value) => {
-                if (value === 'express') {
-                  const expressDelay = delayOptions.find(d => d.isExpress)
-                  if (expressDelay) {
-                    onDelayChange(expressDelay)
-                  }
-                } else {
-                  const workingDays = parseInt(value)
-                  const selectedDelay = delayOptions.find(d => d.type === 'standard' && d.workingDays === workingDays)
-                  if (selectedDelay) {
-                    onDelayChange(selectedDelay)
-                  }
-                }
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {delayOptions.map((option, index) => {
-                  if (option.isExpress) {
-                    return (
-                      <SelectItem key={`express-${index}`} value="express">
-                        Express (jusqu'à 24h - soumis à approbation)
-                      </SelectItem>
-                    )
-                  } else {
-                    return (
-                      <SelectItem key={`standard-${option.workingDays}-${index}`} value={`${option.workingDays}`}>
-                        {option.workingDays} {t('workingDays')}
-                      </SelectItem>
-                    )
-                  }
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Dates d'indication et de livraison */}
-          <div className="space-y-2 pt-4 border-t">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm text-muted-foreground">Date d'indication</Label>
-                <p className="font-medium">{formatDateShort(getIndicationDate())}</p>
-              </div>
-              <div>
-                <Label className="text-sm text-muted-foreground">{t('estimatedDeliveryDate')}</Label>
-                <p className="font-medium">{formatDateShort(getDeliveryDate(delay))}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formatDate(getDeliveryDate(delay))}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Avertissement pour l'express */}
-          {delay.isExpress && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>{t('express')} :</strong> {t('expressWarning', { surcharge: calculateExpressSurcharge(10, delay.expressDays || 1).toFixed(0) })}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Avertissement pour les délais courts (moins de 10 jours) */}
-          {!delay.isExpress && delay.workingDays < 10 && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>{t('reducedDelay')} :</strong> {t('reducedDelayWarning', { surcharge: calculateExpressSurcharge(10, delay.workingDays).toFixed(0), days: delay.workingDays })}
-              </AlertDescription>
-            </Alert>
           )}
         </CardContent>
         </Card>

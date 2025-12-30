@@ -69,7 +69,6 @@ export async function GET(request: NextRequest) {
         currentMarkings: quote.markings,
         delivery: {
           type: quote.deliveryType,
-          method: quote.deliveryMethod || undefined,
           address: quote.deliveryAddress,
           billingAddressDifferent: quote.billingAddressDifferent,
           billingAddress: quote.billingAddress,

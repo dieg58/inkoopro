@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { Product, ColorQuantities, ProductSize, ProductColor, SelectedProduct } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,10 +14,9 @@ import { TEXTILE_DISCOUNT_PERCENTAGE } from '@/lib/data'
 interface ProductSelectorProps {
   selectedProducts: SelectedProduct[]
   onProductsChange: (products: SelectedProduct[]) => void
-  onContinue: () => void
 }
 
-export function ProductSelector({ selectedProducts, onProductsChange, onContinue }: ProductSelectorProps) {
+export function ProductSelector({ selectedProducts, onProductsChange }: ProductSelectorProps) {
   const { toast } = useToast()
   const t = useTranslations('quote')
   const commonT = useTranslations('common')
@@ -1181,9 +1180,6 @@ export function ProductSelector({ selectedProducts, onProductsChange, onContinue
               </div>
             ))}
 
-            <Button onClick={onContinue} className="w-full" size="lg">
-              Continuer vers la personnalisation ({selectedProducts.length} produit{selectedProducts.length > 1 ? 's' : ''})
-            </Button>
           </CardContent>
         </Card>
       )}

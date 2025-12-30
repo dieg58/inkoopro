@@ -1,11 +1,20 @@
 import { ServicePricing } from '@/types'
 import { prisma, withRetry } from './prisma'
 import { defaultPricing } from './service-pricing'
+import { cache } from './cache'
+
+const CACHE_KEY = 'service-pricing'
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 /**
- * Charger les prix des services depuis la base de données
+ * Charger les prix des services depuis la base de données (avec cache)
  */
 export async function loadServicePricing(): Promise<ServicePricing[]> {
+  // Vérifier le cache d'abord
+  const cached = cache.get<ServicePricing[]>(CACHE_KEY)
+  if (cached) {
+    return cached
+  }
   try {
     const pricingRecords = await prisma.servicePricing.findMany()
     
@@ -54,8 +63,17 @@ export async function loadServicePricing(): Promise<ServicePricing[]> {
       if (record.colorCounts) {
         base.colorCounts = JSON.parse(record.colorCounts)
       }
-      if (record.pointRanges) {
-        base.pointRanges = JSON.parse(record.pointRanges)
+      // Pour la broderie, utiliser pointRangesPetite et pointRangesGrande si disponibles
+      if (record.technique === 'broderie') {
+        if (record.pointRangesPetite && record.pointRangesGrande) {
+          base.pointRangesPetite = JSON.parse(record.pointRangesPetite)
+          base.pointRangesGrande = JSON.parse(record.pointRangesGrande)
+        } else if (record.pointRanges) {
+          // Rétrocompatibilité : utiliser pointRanges pour les deux si les nouveaux champs n'existent pas
+          const pointRanges = JSON.parse(record.pointRanges)
+          base.pointRangesPetite = pointRanges
+          base.pointRangesGrande = pointRanges
+        }
       }
       if (record.dimensions) {
         base.dimensions = JSON.parse(record.dimensions)
@@ -86,6 +104,10 @@ export async function loadServicePricing(): Promise<ServicePricing[]> {
       
       return base as ServicePricing
     })
+    
+    // Mettre en cache le résultat
+    cache.set(CACHE_KEY, result, CACHE_TTL)
+    return result
   } catch (error) {
     console.error('❌ Erreur lors du chargement des prix des services:', error)
     return defaultPricing
@@ -110,7 +132,9 @@ export async function saveServicePricing(pricing: ServicePricing[]): Promise<voi
           minQuantity: p.minQuantity,
           quantityRanges: JSON.stringify(p.quantityRanges),
           colorCounts: p.technique === 'serigraphie' ? JSON.stringify((p as any).colorCounts) : null,
-          pointRanges: p.technique === 'broderie' ? JSON.stringify((p as any).pointRanges) : null,
+          pointRanges: null, // Rétrocompatibilité (à supprimer ultérieurement)
+          pointRangesPetite: p.technique === 'broderie' ? JSON.stringify((p as any).pointRangesPetite) : null,
+          pointRangesGrande: p.technique === 'broderie' ? JSON.stringify((p as any).pointRangesGrande) : null,
           dimensions: p.technique === 'dtf' ? JSON.stringify((p as any).dimensions) : null,
           fixedFeePerColor: p.technique === 'serigraphie' ? (p as any).fixedFeePerColor : null,
           fixedFeeSmallDigitization: p.technique === 'broderie' ? (p as any).fixedFeeSmallDigitization : null,
@@ -148,6 +172,9 @@ export async function saveServicePricing(pricing: ServicePricing[]): Promise<voi
       })
     })
     })
+    
+    // Invalider le cache après sauvegarde
+    cache.delete(CACHE_KEY)
     
     console.log('✅ Prix des services sauvegardés dans la base de données')
   } catch (error) {

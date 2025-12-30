@@ -170,6 +170,7 @@
     "shipping": "Shipping costs",
     "packaging": "Individual packaging",
     "carton": "New carton",
+    "cartonCount": "carton",
     "vectorization": "Logo vectorization",
     "logo": "logo",
     "totalHT": "Total ex. VAT",

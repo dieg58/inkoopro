@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const {
+      quoteId, // ID optionnel pour forcer la mise à jour d'un devis spécifique
       title,
       selectedProducts,
       quoteItems,
@@ -53,15 +54,21 @@ export async function POST(request: NextRequest) {
     const totalHT = 0 // TODO: Calculer depuis quoteItems
 
     // Trouver ou créer le devis en cours
-    const existingQuote = await prisma.quote.findFirst({
+    let existingQuote = null
+    if (quoteId) {
+      // Si un ID est fourni (et n'est pas null explicitement), chercher ce devis spécifique
+      existingQuote = await prisma.quote.findFirst({
       where: {
-        clientId: dbClient.id,
-        status: 'draft',
-      },
-      orderBy: {
-        updatedAt: 'desc',
-      },
-    })
+          id: quoteId,
+          clientId: dbClient.id, // Vérifier que le devis appartient au client
+        },
+      })
+    }
+    // Si quoteId est null explicitement ou undefined, créer un nouveau devis (pas de recherche du draft le plus récent)
+
+    // Validation des données avec valeurs par défaut
+    const safeDelay = delay || { type: 'standard', workingDays: 10 }
+    const safeDelivery = delivery || { type: 'pickup' }
 
     const baseQuoteData = {
       title: title || null,
@@ -71,16 +78,15 @@ export async function POST(request: NextRequest) {
       clientEmail: clientInfo?.email || client.email,
       clientCompany: clientInfo?.company || client.company,
       clientPhone: clientInfo?.phone || client.phone,
-      deliveryType: delivery?.type || 'livraison',
-      deliveryMethod: delivery?.method || null,
-      deliveryAddress: delivery?.address || null,
-      billingAddressDifferent: delivery?.billingAddressDifferent || false,
-      billingAddress: delivery?.billingAddress || null,
-      individualPackaging: delivery?.individualPackaging || false,
-      newCarton: delivery?.newCarton || false,
-      delayWorkingDays: delay?.workingDays || 10,
-      delayType: delay?.type || 'standard',
-      delayExpressDays: delay?.expressDays || null,
+      deliveryType: safeDelivery.type || 'pickup',
+      deliveryAddress: safeDelivery.address || null,
+      billingAddressDifferent: safeDelivery.billingAddressDifferent || false,
+      billingAddress: safeDelivery.billingAddress || null,
+      individualPackaging: safeDelivery.individualPackaging || false,
+      newCarton: safeDelivery.newCarton || false,
+      delayWorkingDays: safeDelay.workingDays || 10,
+      delayType: safeDelay.type || 'standard',
+      delayExpressDays: safeDelay.expressDays || null,
       selectedProducts: selectedProducts || [],
       markings: currentMarkings || [],
       quoteItems: quoteItems || [],
@@ -90,6 +96,7 @@ export async function POST(request: NextRequest) {
     let quote
     if (existingQuote) {
       // Mettre à jour le devis existant
+      console.log(`🔄 Mise à jour du devis existant: ${existingQuote.id}`)
       quote = await prisma.quote.update({
         where: { id: existingQuote.id },
         data: {
@@ -99,9 +106,10 @@ export async function POST(request: NextRequest) {
           }
         },
       })
-      console.log(`✅ Devis mis à jour: ${quote.id} - Titre: ${quote.title} - Statut: ${quote.status}`)
+      console.log(`✅ Devis mis à jour: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0}`)
     } else {
       // Créer un nouveau devis
+      console.log(`🆕 Création d'un nouveau devis pour le client ${dbClient.id}`)
       quote = await prisma.quote.create({
         data: {
           ...baseQuoteData,
@@ -110,7 +118,7 @@ export async function POST(request: NextRequest) {
           }
         },
       })
-      console.log(`✅ Nouveau devis créé: ${quote.id} - Titre: ${quote.title} - Statut: ${quote.status}`)
+      console.log(`✅ Nouveau devis créé: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0}`)
     }
 
     return NextResponse.json({
@@ -123,9 +131,16 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Erreur lors de la sauvegarde du devis:', error)
+    console.error('❌ Erreur lors de la sauvegarde du devis:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    console.error('❌ Détails de l\'erreur:', errorDetails)
     return NextResponse.json(
-      { success: false, error: 'Erreur lors de la sauvegarde du devis' },
+      { 
+        success: false, 
+        error: errorMessage || 'Erreur lors de la sauvegarde du devis',
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
       { status: 500 }
     )
   }

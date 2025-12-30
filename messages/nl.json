@@ -170,6 +170,7 @@
     "shipping": "Verzendkosten",
     "packaging": "Individuele verpakking",
     "carton": "Nieuwe doos",
+    "cartonCount": "doos",
     "vectorization": "Logo vectorisatie",
     "logo": "logo",
     "totalHT": "Totaal excl. BTW",

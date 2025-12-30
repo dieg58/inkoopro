@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { LanguageSelector } from '@/components/LanguageSelector'
@@ -9,6 +9,7 @@ import { ProductSelector } from '@/components/quote/ProductSelector'
 import { CustomizationManager } from '@/components/quote/CustomizationManager'
 import { OrderSummary } from '@/components/quote/OrderSummary'
 import { DeliverySelector } from '@/components/quote/DeliverySelector'
+import { OptionsSelector } from '@/components/quote/OptionsSelector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -18,7 +19,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { delayOptions } from '@/lib/data'
 import { Loader2, CheckCircle2, ArrowLeft, LogOut, User, Package, Save, Download, Check, Settings } from 'lucide-react'
 
-type CurrentStep = 'title' | 'products' | 'customization' | 'review'
+type CurrentStep = 'title' | 'products' | 'customization' | 'delivery' | 'options' | 'review'
 
 interface ProductCustomization {
   selectedProductIds: string[] // Produits concernés par cette personnalisation
@@ -52,7 +53,7 @@ export default function QuotePage() {
   }>>([])
   const [currentStep, setCurrentStep] = useState<CurrentStep>('title')
   const [quoteTitle, setQuoteTitle] = useState<string>('')
-  const [delivery, setDelivery] = useState<Delivery>({ type: 'livraison' })
+  const [delivery, setDelivery] = useState<Delivery>({ type: 'pickup' })
   const [delay, setDelay] = useState<Delay>(delayOptions[0]) // Par défaut : 10 jours ouvrables
   const [clientInfo, setClientInfo] = useState({
     name: '',
@@ -64,14 +65,24 @@ export default function QuotePage() {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [client, setClient] = useState<any>(null)
   const [isLoadingClient, setIsLoadingClient] = useState(true)
+  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null)
 
   // Sauvegarder l'état dans la base de données
-  const saveToDatabase = async () => {
+  const saveToDatabase = useCallback(async () => {
     try {
-      await fetch('/api/quotes/save', {
+      console.log('📤 Envoi de la sauvegarde du devis:', {
+        quoteId: currentQuoteId,
+        title: quoteTitle,
+        productsCount: selectedProducts.length,
+        markingsCount: currentMarkings.length,
+        step: currentStep
+      })
+      
+      const response = await fetch('/api/quotes/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          quoteId: currentQuoteId, // Envoyer l'ID si on en a un
           title: quoteTitle,
           selectedProducts,
           quoteItems,
@@ -82,8 +93,21 @@ export default function QuotePage() {
           clientInfo,
         }),
       })
+      
+      // Mettre à jour l'ID du devis si on reçoit une réponse avec un ID
+      const data = await response.json()
+      if (data.success) {
+        if (data.quote && data.quote.id) {
+          console.log('✅ Devis sauvegardé avec succès:', data.quote.id, '- Titre:', data.quote.title)
+          setCurrentQuoteId(data.quote.id)
+        } else {
+          console.warn('⚠️ Sauvegarde réussie mais pas d\'ID retourné:', data)
+        }
+      } else {
+        console.error('❌ Erreur lors de la sauvegarde:', data.error)
+      }
     } catch (error) {
-      console.error('Erreur sauvegarde base de données:', error)
+      console.error('❌ Erreur sauvegarde base de données:', error)
       // Fallback vers localStorage en cas d'erreur
       try {
         const data = {
@@ -101,34 +125,116 @@ export default function QuotePage() {
         console.error('Erreur sauvegarde localStorage fallback:', localError)
       }
     }
-  }
+  }, [currentQuoteId, quoteTitle, selectedProducts, quoteItems, currentMarkings, currentStep, delivery, delay, clientInfo])
 
   // Charger l'état depuis la base de données
   useEffect(() => {
     const loadFromDatabase = async () => {
       try {
+        // Vérifier d'abord si on doit charger un devis spécifique depuis localStorage (venant de la page des commandes)
+        const quoteToLoad = localStorage.getItem('inkoo_pro_quote_to_load')
+        if (quoteToLoad) {
+          try {
+            const loadData = JSON.parse(quoteToLoad)
+            if (loadData.quote) {
+              const quote = loadData.quote
+              console.log('📋 Chargement du devis depuis localStorage (quote_to_load):', loadData.quoteId)
+              setQuoteTitle(quote.title || '')
+              setSelectedProducts(quote.selectedProducts || [])
+              setQuoteItems(quote.quoteItems || [])
+              // L'API retourne currentMarkings au lieu de markings
+              setCurrentMarkings(quote.currentMarkings || quote.markings || [])
+              setCurrentStep(quote.step || 'title')
+              
+              // Mapper la structure delivery correctement
+              const deliveryData = quote.delivery || {}
+              setDelivery({
+                type: deliveryData.type || 'pickup',
+                address: deliveryData.address || undefined,
+                billingAddress: deliveryData.billingAddress || undefined,
+                individualPackaging: deliveryData.individualPackaging || false,
+                newCarton: deliveryData.newCarton || false,
+              })
+              
+              // Mapper la structure delay correctement
+              const delayData = quote.delay || {}
+              if (delayData.isExpress && delayData.expressDays) {
+                const expressDelay = delayOptions.find(d => d.isExpress && d.expressDays === delayData.expressDays)
+                setDelay(expressDelay || delayOptions[0])
+              } else if (delayData.workingDays) {
+                const standardDelay = delayOptions.find(d => !d.isExpress && d.workingDays === delayData.workingDays)
+                setDelay(standardDelay || delayOptions[0])
+              } else {
+                setDelay(delayOptions[0])
+              }
+              
+              // Mapper clientInfo
+              const clientInfoData = quote.clientInfo || {}
+              setClientInfo({
+                name: clientInfoData.name || quote.clientName || '',
+                email: clientInfoData.email || quote.clientEmail || '',
+                company: clientInfoData.company || quote.clientCompany || '',
+                phone: clientInfoData.phone || quote.clientPhone || '',
+              })
+              // Stocker l'ID du devis pour les futures sauvegardes
+              setCurrentQuoteId(loadData.quoteId || quote.id || null)
+              // Nettoyer localStorage après chargement
+              localStorage.removeItem('inkoo_pro_quote_to_load')
+              return
+            }
+          } catch (loadError) {
+            console.error('Erreur chargement devis depuis localStorage (quote_to_load):', loadError)
+            localStorage.removeItem('inkoo_pro_quote_to_load')
+          }
+        }
+
+        // Sinon, charger depuis l'API current
         const response = await fetch('/api/quotes/current')
         const data = await response.json()
         
         if (data.success && data.quote) {
           const quote = data.quote
+          setCurrentQuoteId(quote.id || null)
           setQuoteTitle(quote.title || '')
           setSelectedProducts(quote.selectedProducts || [])
           setQuoteItems(quote.quoteItems || [])
-          setCurrentMarkings(quote.markings || [])
+          setCurrentMarkings(quote.currentMarkings || quote.markings || [])
           setCurrentStep(quote.step || 'title')
-          setDelivery(quote.delivery || { type: 'livraison' })
-          setDelay(quote.delay || delayOptions[0])
+          
+          // Mapper la structure delivery correctement
+          const deliveryData = quote.delivery || {}
+          setDelivery({
+            type: deliveryData.type || 'pickup',
+            address: deliveryData.address || undefined,
+            billingAddress: deliveryData.billingAddress || undefined,
+            individualPackaging: deliveryData.individualPackaging || false,
+            newCarton: deliveryData.newCarton || false,
+          })
+          
+          // Mapper la structure delay correctement
+          const delayData = quote.delay || {}
+          if (delayData.isExpress && delayData.expressDays) {
+            const expressDelay = delayOptions.find(d => d.isExpress && d.expressDays === delayData.expressDays)
+            setDelay(expressDelay || delayOptions[0])
+          } else if (delayData.workingDays) {
+            const standardDelay = delayOptions.find(d => !d.isExpress && d.workingDays === delayData.workingDays)
+            setDelay(standardDelay || delayOptions[0])
+          } else {
+            setDelay(delayOptions[0])
+          }
+          
+          // Mapper clientInfo
+          const clientInfoData = quote.clientInfo || {}
           setClientInfo({
-            name: quote.clientName || '',
-            email: quote.clientEmail || '',
-            company: quote.clientCompany || '',
-            phone: quote.clientPhone || '',
+            name: clientInfoData.name || quote.clientName || '',
+            email: clientInfoData.email || quote.clientEmail || '',
+            company: clientInfoData.company || quote.clientCompany || '',
+            phone: clientInfoData.phone || quote.clientPhone || '',
           })
         }
       } catch (error) {
         console.error('Erreur chargement depuis base de données:', error)
-        // Fallback vers localStorage
+        // Fallback vers localStorage draft
         try {
           const stored = localStorage.getItem('inkoo_pro_quote_draft')
           if (stored) {
@@ -138,7 +244,7 @@ export default function QuotePage() {
             setQuoteItems(data.quoteItems || [])
             setCurrentMarkings(data.currentMarkings || [])
             setCurrentStep(data.currentStep || 'title')
-            setDelivery(data.delivery || { type: 'livraison' })
+            setDelivery(data.delivery || { type: 'pickup' })
             setDelay(data.delay || delayOptions[0])
             setClientInfo(data.clientInfo || { name: '', email: '', company: '', phone: '' })
           }
@@ -169,9 +275,14 @@ export default function QuotePage() {
           
           // Charger la méthode de livraison par défaut du client
           if (data.client.defaultDeliveryMethod) {
+            // Mapper l'ancienne méthode vers le nouveau type si nécessaire
+            const deliveryType = data.client.defaultDeliveryMethod === 'pickup' 
+              ? 'pickup' 
+              : data.client.defaultDeliveryMethod === 'client_carrier'
+              ? 'client_carrier'
+              : 'pickup' // Par défaut
             setDelivery({
-              type: 'livraison',
-              method: data.client.defaultDeliveryMethod,
+              type: deliveryType as Delivery['type'],
             })
           }
         }
@@ -187,10 +298,22 @@ export default function QuotePage() {
 
   // Sauvegarder automatiquement à chaque changement
   useEffect(() => {
-    if (quoteTitle && selectedProducts.length > 0) {
+    // Sauvegarder seulement si on a au moins un titre (les produits peuvent être ajoutés plus tard)
+    if (quoteTitle) {
+      console.log('💾 Sauvegarde automatique déclenchée:', { 
+        quoteId: currentQuoteId, 
+        title: quoteTitle, 
+        productsCount: selectedProducts.length,
+        step: currentStep 
+      })
       saveToDatabase()
+    } else {
+      console.log('⏸️  Sauvegarde automatique ignorée (pas de titre):', { 
+        quoteTitle, 
+        productsCount: selectedProducts.length 
+      })
     }
-  }, [quoteTitle, selectedProducts, quoteItems, currentMarkings, currentStep, delivery, delay, clientInfo])
+  }, [quoteTitle, selectedProducts, quoteItems, currentMarkings, currentStep, delivery, delay, clientInfo, saveToDatabase, currentQuoteId])
 
   const handleLogout = async () => {
     try {
@@ -204,15 +327,66 @@ export default function QuotePage() {
 
   const handleSaveDraft = async () => {
     try {
-      await saveToDatabase()
+      // Sauvegarder en forçant la création d'un nouveau devis (en passant null comme quoteId)
+      console.log('💾 Sauvegarde explicite du devis:', {
+        quoteId: null,
+        title: quoteTitle,
+        productsCount: selectedProducts.length,
+        markingsCount: currentMarkings.length,
+        step: currentStep
+      })
+      
+      const response = await fetch('/api/quotes/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteId: null, // Forcer la création d'un nouveau devis
+          title: quoteTitle,
+          selectedProducts,
+          quoteItems,
+          currentMarkings,
+          currentStep,
+          delivery,
+          delay,
+          clientInfo,
+        }),
+      })
+      
+      // Vérifier le statut HTTP avant de parser le JSON
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText || `Erreur HTTP ${response.status}` }
+        }
+        console.error('❌ Erreur HTTP lors de la sauvegarde:', response.status, errorData)
+        throw new Error(errorData.error || errorData.details || `Erreur HTTP ${response.status}`)
+      }
+      
+      const data = await response.json()
+      if (data.success) {
+        console.log('✅ Devis sauvegardé avec succès:', data.quote?.id)
       toast({
         title: t('draftSaved'),
         description: t('draftSavedDescription'),
       })
+        // Réinitialiser l'état local pour permettre la création d'un nouveau devis
+        setCurrentQuoteId(null)
+        // Rediriger vers la page des devis sauvegardés et forcer le rafraîchissement
+        router.push(`/${locale}/orders`)
+        router.refresh()
+      } else {
+        console.error('❌ Erreur dans la réponse:', data.error)
+        throw new Error(data.error || 'Erreur lors de la sauvegarde')
+      }
     } catch (error) {
+      console.error('❌ Erreur sauvegarde devis:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
       toast({
         title: commonT('error'),
-        description: t('draftSaveError'),
+        description: errorMessage || t('draftSaveError'),
         variant: 'destructive',
       })
     }
@@ -387,7 +561,9 @@ export default function QuotePage() {
     { id: 'title', label: '1', title: t('stepTitle') },
     { id: 'products', label: '2', title: t('stepProducts') },
     { id: 'customization', label: '3', title: t('stepCustomization') },
-    { id: 'review', label: '4', title: t('stepReview') },
+    { id: 'delivery', label: '4', title: 'Livraison' },
+    { id: 'options', label: '5', title: 'Options' },
+    { id: 'review', label: '6', title: t('stepReview') },
   ]
 
   const currentStepIndex = steps.findIndex(s => s.id === currentStep)
@@ -437,7 +613,7 @@ export default function QuotePage() {
                 </Button>
                 <Button variant="ghost" onClick={() => router.push(`/${locale}/settings`)}>
                   <Settings className="h-4 w-4 mr-2" />
-                  {settingsT('settings')}
+                  {settingsT('title')}
                 </Button>
                 <Button variant="ghost" onClick={handleLogout}>
                   <LogOut className="h-4 w-4 mr-2" />
@@ -513,9 +689,6 @@ export default function QuotePage() {
                   <ProductSelector
                     selectedProducts={selectedProducts}
                     onProductsChange={setSelectedProducts}
-                    onEditProduct={(productId) => {
-                      // Logique d'édition
-                    }}
                   />
                   <div className="flex gap-2 mt-4">
                     <Button variant="outline" onClick={() => setCurrentStep('title')}>
@@ -542,10 +715,12 @@ export default function QuotePage() {
                 </CardHeader>
                 <CardContent>
                   <CustomizationManager
+                    key={`customization-${currentStep}`}
                     selectedProducts={selectedProducts}
+                    initialMarkings={currentMarkings}
                     onComplete={(markings) => {
                       setCurrentMarkings(markings)
-                      setCurrentStep('review')
+                      setCurrentStep('delivery')
                     }}
                     onMarkingsChange={setCurrentMarkings}
                   />
@@ -553,6 +728,67 @@ export default function QuotePage() {
                     <Button variant="outline" onClick={() => setCurrentStep('products')}>
                       <ArrowLeft className="h-4 w-4 mr-2" />
                       {t('back')}
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        if (currentMarkings.length > 0) {
+                          setCurrentStep('delivery')
+                        }
+                      }}
+                      disabled={currentMarkings.length === 0}
+                      className="flex-1"
+                    >
+                      {t('continue')}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {currentStep === 'delivery' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>4. Livraison</CardTitle>
+                  <CardDescription>Configurez la méthode de livraison</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <DeliverySelector
+                    delivery={delivery}
+                    onDeliveryChange={setDelivery}
+                  />
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setCurrentStep('customization')}>
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      {t('back')}
+                    </Button>
+                    <Button onClick={() => setCurrentStep('options')} className="flex-1">
+                      {t('continue')}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {currentStep === 'options' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>5. Options</CardTitle>
+                  <CardDescription>Configurez les options de délai et d'emballage</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <OptionsSelector
+                    delivery={delivery}
+                    onDeliveryChange={setDelivery}
+                    delay={delay}
+                    onDelayChange={setDelay}
+                  />
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setCurrentStep('delivery')}>
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      {t('back')}
+                    </Button>
+                    <Button onClick={() => setCurrentStep('review')} className="flex-1">
+                      {t('continue')}
                     </Button>
                   </div>
                 </CardContent>
@@ -562,18 +798,12 @@ export default function QuotePage() {
             {currentStep === 'review' && (
               <Card>
                 <CardHeader>
-                  <CardTitle>4. {t('stepReview')}</CardTitle>
+                  <CardTitle>6. {t('stepReview')}</CardTitle>
                   <CardDescription>{t('stepReviewDescription')}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <DeliverySelector
-                    delivery={delivery}
-                    onDeliveryChange={setDelivery}
-                    delay={delay}
-                    onDelayChange={setDelay}
-                  />
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setCurrentStep('customization')}>
+                    <Button variant="outline" onClick={() => setCurrentStep('options')}>
                       <ArrowLeft className="h-4 w-4 mr-2" />
                       {t('back')}
                     </Button>
@@ -610,6 +840,7 @@ export default function QuotePage() {
               selectedProducts={selectedProducts}
               markings={currentMarkings}
               delivery={delivery}
+              delay={delay}
             />
           </div>
         </div>

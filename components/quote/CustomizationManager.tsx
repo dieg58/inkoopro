@@ -8,7 +8,7 @@ import { TechniqueSelector } from './TechniqueSelector'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Edit2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { getMinQuantityForTechnique } from '@/lib/service-pricing'
 
@@ -27,14 +27,15 @@ interface CustomizationManagerProps {
   selectedProducts: SelectedProduct[]
   onComplete: (markings: Marking[]) => void
   onMarkingsChange?: (markings: Marking[]) => void // Callback pour mettre à jour le récapitulatif en temps réel
+  initialMarkings?: Marking[] // Marquages existants à préserver lors du retour en arrière
 }
 
-export function CustomizationManager({ selectedProducts, onComplete, onMarkingsChange }: CustomizationManagerProps) {
+export function CustomizationManager({ selectedProducts, onComplete, onMarkingsChange, initialMarkings = [] }: CustomizationManagerProps) {
   const { toast } = useToast()
   const t = useTranslations('quote')
   const techniqueT = useTranslations('technique')
   const commonT = useTranslations('common')
-  const [markings, setMarkings] = useState<Marking[]>([])
+  const [markings, setMarkings] = useState<Marking[]>(initialMarkings)
   const [currentMarking, setCurrentMarking] = useState<Marking>({
     id: '',
     selectedProductIds: [],
@@ -45,6 +46,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
     notes: '',
   })
   const [servicePricing, setServicePricing] = useState<ServicePricing[]>([])
+  const [editingMarkingId, setEditingMarkingId] = useState<string | null>(null) // ID du marquage en cours d'édition
 
   // Charger les prix des services
   useEffect(() => {
@@ -148,6 +150,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
       totalQuantity,
       minQuantity,
       servicePricingLength: servicePricing.length,
+      editingMarkingId,
       servicePricingData: servicePricing.find(p => p.technique === currentMarking.technique),
     })
     
@@ -161,7 +164,40 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
       return
     }
 
-    // Ajouter le marquage à la liste
+    // Créer ou mettre à jour le marquage
+    if (editingMarkingId) {
+      // Mode édition : remplacer le marquage existant
+      const updatedMarkings = markings.map(m => 
+        m.id === editingMarkingId 
+          ? {
+              ...currentMarking,
+              id: editingMarkingId, // Conserver l'ID original
+              selectedProductIds: currentMarking.selectedProductIds,
+              technique: currentMarking.technique,
+              techniqueOptions: currentMarking.techniqueOptions,
+              position: currentMarking.position,
+              files: currentMarking.files,
+              notes: currentMarking.notes,
+              vectorization: currentMarking.vectorization,
+            }
+          : m
+      )
+      setMarkings(updatedMarkings)
+      
+      // Notifier le parent du changement
+      if (onMarkingsChange) {
+        onMarkingsChange(updatedMarkings)
+      }
+
+      // Sortir du mode édition
+      setEditingMarkingId(null)
+      
+      toast({
+        title: t('markingModified') || 'Marquage modifié',
+        description: t('markingModifiedDescription') || 'Le marquage a été modifié avec succès',
+      })
+    } else {
+      // Mode création : ajouter un nouveau marquage
     const newMarking: Marking = {
       id: `marking-${Date.now()}`,
       selectedProductIds: [...currentMarking.selectedProductIds],
@@ -170,6 +206,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
       position: currentMarking.position,
       files: [...currentMarking.files],
       notes: currentMarking.notes,
+        vectorization: currentMarking.vectorization,
     }
 
     const updatedMarkings = [...markings, newMarking]
@@ -178,6 +215,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
     // Notifier le parent du changement
     if (onMarkingsChange) {
       onMarkingsChange(updatedMarkings)
+      }
     }
 
     // Réinitialiser pour le prochain marquage
@@ -196,23 +234,52 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
     const updatedMarkings = markings.filter(m => m.id !== markingId)
     setMarkings(updatedMarkings)
     
+    // Si on supprime le marquage en cours d'édition, sortir du mode édition
+    if (editingMarkingId === markingId) {
+      setEditingMarkingId(null)
+      setCurrentMarking({
+        id: '',
+        selectedProductIds: [],
+        technique: null,
+        techniqueOptions: null,
+        position: null,
+        files: [],
+        notes: '',
+      })
+    }
+    
     // Notifier le parent du changement
     if (onMarkingsChange) {
       onMarkingsChange(updatedMarkings)
     }
   }
 
-  const handleCommand = () => {
-    if (markings.length === 0) {
-        toast({
-          title: commonT('error'),
-          description: t('addAtLeastOneMarking'),
-          variant: 'destructive',
-        })
-      return
-    }
+  const handleEditMarking = (markingId: string) => {
+    const markingToEdit = markings.find(m => m.id === markingId)
+    if (!markingToEdit) return
 
-    onComplete(markings)
+    // Charger les données du marquage dans currentMarking
+    setCurrentMarking({
+      id: markingToEdit.id,
+      selectedProductIds: markingToEdit.selectedProductIds,
+      technique: markingToEdit.technique,
+      techniqueOptions: markingToEdit.techniqueOptions,
+      position: markingToEdit.position,
+      files: markingToEdit.files || [],
+      notes: markingToEdit.notes || '',
+      vectorization: markingToEdit.vectorization || false,
+        })
+    
+    // Activer le mode édition
+    setEditingMarkingId(markingId)
+
+    // Scroller vers le formulaire de configuration
+    setTimeout(() => {
+      const configSection = document.querySelector('[data-config-section]')
+      if (configSection) {
+        configSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 100)
   }
 
   const getProductName = (productId: string) => {
@@ -231,14 +298,6 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>3. {t('customization')}</CardTitle>
-          <CardDescription>
-            {t('customizationDescription')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
           {/* Sélection des produits */}
           <div className="space-y-3">
             <Label className="text-base font-semibold">{t('productsToCustomize')}</Label>
@@ -251,8 +310,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
 
           {/* Configuration du marquage */}
           {currentMarking.selectedProductIds.length > 0 && (
-            <div className="space-y-4 pt-4 border-t">
-              
+        <div className="space-y-4 pt-4 border-t" data-config-section>
               {/* Avertissement quantité minimum */}
               {currentMarking.technique && (() => {
                 const totalQuantity = getTotalQuantityForSelectedProducts(currentMarking.selectedProductIds)
@@ -350,20 +408,27 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                 }}
               />
 
-              {/* Bouton pour ajouter ce marquage */}
+          {/* Bouton pour ajouter ou modifier ce marquage */}
               <Button 
                 onClick={handleAddMarking} 
                 className="w-full" 
                 size="lg"
                 disabled={!currentMarking.technique || !currentMarking.techniqueOptions || !currentMarking.position}
               >
+            {editingMarkingId ? (
+              <>
+                <Edit2 className="h-4 w-4 mr-2" />
+                {t('modifyMarking') || 'Modifier le marquage'}
+              </>
+            ) : (
+              <>
                 <Plus className="h-4 w-4 mr-2" />
                 {t('addMarking')}
+              </>
+            )}
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
 
       {/* Liste des marquages ajoutés */}
       {markings.length > 0 && (
@@ -381,7 +446,19 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                     <span className="text-muted-foreground">
                       {marking.technique ? getTechniqueName(marking.technique) : t('notConfigured')}
                     </span>
+                    {editingMarkingId === marking.id && (
+                      <span className="ml-2 text-xs text-blue-600 font-medium">(En cours de modification)</span>
+                    )}
                   </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditMarking(marking.id)}
+                      disabled={editingMarkingId !== null && editingMarkingId !== marking.id}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -389,6 +466,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -396,14 +474,6 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
         </Card>
       )}
 
-      {/* Bouton Continuer */}
-      {markings.length > 0 && (
-        <div className="flex justify-end">
-          <Button onClick={handleCommand} className="w-full md:w-auto" size="lg">
-            {t('continueToReview')}
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

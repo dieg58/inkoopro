@@ -53,7 +53,13 @@ export const defaultPricing: ServicePricing[] = [
       { min: 51, max: 100, label: '51-100' },
       { min: 101, max: null, label: '101+' },
     ],
-    pointRanges: [
+    pointRangesPetite: [
+      { min: 0, max: 5000, label: '0-5000' },
+      { min: 5001, max: 10000, label: '5001-10000' },
+      { min: 10001, max: 20000, label: '10001-20000' },
+      { min: 20001, max: null, label: '20001+' },
+    ],
+    pointRangesGrande: [
       { min: 0, max: 5000, label: '0-5000' },
       { min: 5001, max: 10000, label: '5001-10000' },
       { min: 10001, max: 20000, label: '10001-20000' },
@@ -158,8 +164,9 @@ export function calculateBroderiePrice(
   const quantityRange = findQuantityRange(quantity, pricing.quantityRanges)
   if (!quantityRange) return null
   
-  // Trouver la fourchette de points
-  const pointRange = pricing.pointRanges.find(range => 
+  // Utiliser la bonne fourchette de points selon la taille de broderie
+  const pointRanges = embroiderySize === 'petite' ? pricing.pointRangesPetite : pricing.pointRangesGrande
+  const pointRange = pointRanges.find(range => 
     pointCount >= range.min && (range.max === null || pointCount <= range.max)
   )
   if (!pointRange) return null
