@@ -46,7 +46,7 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
               params: {
                 db: ODOO_DB,
                 login: ODOO_USERNAME,
-                password: auth.password,
+                password: ODOO_PASSWORD,
               },
             }),
           })
