@@ -1,6 +1,4 @@
 import { Product, ProductSize, ProductCategory } from '@/types'
-import { promises as fs } from 'fs'
-import path from 'path'
 
 /**
  * Configuration Odoo pour les produits
@@ -109,88 +107,29 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
 }
 
 /**
- * Chemin du fichier de cache
- * Sur Vercel, utiliser /tmp car le système de fichiers est en lecture seule sauf /tmp
- */
-const CACHE_FILE_PATH = process.env.VERCEL
-  ? path.join('/tmp', 'odoo-products.json')
-  : path.join(process.cwd(), '.cache', 'odoo-products.json')
-const CACHE_DURATION_MS = 24 * 60 * 60 * 1000 // 24 heures
-
-/**
- * Interface pour le cache
- */
-interface ProductsCache {
-  products: Product[]
-  lastUpdate: number // Timestamp en millisecondes
-}
-
-/**
- * Charge les produits depuis le cache si valide
- */
-async function loadFromCache(): Promise<Product[] | null> {
-  try {
-    const cacheData = await fs.readFile(CACHE_FILE_PATH, 'utf-8')
-    const cache: ProductsCache = JSON.parse(cacheData)
-    
-    const now = Date.now()
-    const cacheAge = now - cache.lastUpdate
-    
-    // Vérifier si le cache est encore valide (moins de 24h)
-    if (cacheAge < CACHE_DURATION_MS) {
-      console.log(`✅ Cache valide (${Math.round(cacheAge / 1000 / 60)} minutes) - ${cache.products.length} produits`)
-      return cache.products
-    } else {
-      console.log(`⏰ Cache expiré (${Math.round(cacheAge / 1000 / 60 / 60)} heures) - Mise à jour nécessaire`)
-      return null
-    }
-  } catch (error) {
-    // Le fichier de cache n'existe pas ou est invalide
-    console.log('ℹ️  Aucun cache trouvé, récupération depuis Odoo...')
-    return null
-  }
-}
-
-/**
- * Sauvegarde les produits dans le cache
- */
-async function saveToCache(products: Product[]): Promise<void> {
-  try {
-    // Créer le dossier cache s'il n'existe pas (sauf pour /tmp qui existe toujours)
-    const cacheDir = path.dirname(CACHE_FILE_PATH)
-    if (!process.env.VERCEL) {
-      // Sur Vercel, /tmp existe toujours, pas besoin de le créer
-      await fs.mkdir(cacheDir, { recursive: true })
-    }
-    
-    const cache: ProductsCache = {
-      products,
-      lastUpdate: Date.now(),
-    }
-    
-    await fs.writeFile(CACHE_FILE_PATH, JSON.stringify(cache, null, 2), 'utf-8')
-    console.log(`💾 Cache sauvegardé: ${products.length} produits (${CACHE_FILE_PATH})`)
-  } catch (error) {
-    console.error('⚠️  Erreur lors de la sauvegarde du cache:', error)
-    if (error instanceof Error) {
-      console.error('   → Message:', error.message)
-    }
-    // Ne pas bloquer si le cache ne peut pas être sauvegardé
-    // Les produits sont stockés en base de données de toute façon
-  }
-}
-
-/**
  * Récupère les produits depuis Odoo
- * Le cache fichier n'est plus utilisé car non persistant sur Vercel
- * Utilisez syncProductsFromOdoo() pour synchroniser vers la DB, puis getProductsFromDB() pour récupérer
- * @param forceRefresh - Ignoré (conservé pour compatibilité), toujours récupère depuis Odoo
+ * 
+ * IMPORTANT: Cette fonction ne doit PAS être appelée pendant le build.
+ * Les produits doivent être synchronisés vers la DB via syncProductsFromOdoo() 
+ * (appelé uniquement via l'API /api/products/sync depuis l'interface admin),
+ * puis récupérés depuis la DB via getProductsFromDB().
+ * 
+ * @param forceRefresh - Conservé pour compatibilité (toujours récupère depuis Odoo)
  * @param limit - Limite optionnelle du nombre de produits à récupérer
  */
 export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?: number): Promise<Product[]> {
-  // Le cache fichier n'est plus utilisé car il n'est pas persistant sur Vercel
-  // La DB est maintenant la source de vérité persistante
-  console.log('🔄 Récupération des produits depuis Odoo (cache fichier désactivé, utilisez la DB)')
+  // Cette fonction récupère directement depuis Odoo (sans cache fichier)
+  // Elle ne doit être appelée que via syncProductsFromOdoo() depuis l'API /api/products/sync
+  // Les produits sont ensuite stockés en DB et récupérés via getProductsFromDB()
+  
+  // Protection : ne pas appeler Odoo pendant le build
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    console.warn('⚠️  getProductsFromOdoo() appelé pendant le build, retour d\'un tableau vide')
+    console.warn('   → Les produits doivent être synchronisés via /api/products/sync depuis l\'interface admin')
+    return []
+  }
+  
+  console.log('🔄 Récupération des produits depuis Odoo (sans cache fichier, synchronisation vers DB uniquement)')
 
   try {
     // Log des variables d'environnement (masquer les mots de passe)
@@ -1226,8 +1165,8 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
     
     console.log(`✅ ${transformedProducts.length} produit(s) créé(s) avec leurs variantes`)
     
-    // Le cache fichier n'est plus utilisé (non persistant sur Vercel)
-    // Les produits doivent être synchronisés vers la DB via syncProductsFromOdoo()
+    // Les produits retournés doivent être synchronisés vers la DB via syncProductsFromOdoo()
+    // Cette fonction ne sauvegarde PAS dans un cache fichier (non persistant sur Vercel)
     
     return transformedProducts
   } catch (error) {
@@ -1237,7 +1176,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
       console.error('   → Stack:', error.stack)
     }
     
-    // Le cache fichier n'est plus utilisé, retourner un tableau vide en cas d'erreur
+    // En cas d'erreur, retourner un tableau vide
     // Les produits doivent être récupérés depuis la DB via getProductsFromDB()
     return []
   }
