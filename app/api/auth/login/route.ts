@@ -28,39 +28,40 @@ export async function POST(request: NextRequest) {
 
       // Optionnellement, synchroniser les données dans la base locale
       try {
-        // Vérifier d'abord si DATABASE_URL est configuré
+        // Vérifier d'abord si DATABASE_URL est configuré pour PostgreSQL
         if (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:')) {
           console.warn('⚠️  DATABASE_URL non configuré ou SQLite, skip sync locale')
         } else {
           await prisma.client.upsert({
-          where: { email },
-          update: {
-            odooId: odooResult.client.id,
-            name: odooResult.client.name,
-            company: odooResult.client.company || null,
-            phone: odooResult.client.phone || null,
-            street: odooResult.client.street || null,
-            city: odooResult.client.city || null,
-            zip: odooResult.client.zip || null,
-            country: odooResult.client.country || null,
-            status: 'approved', // Les clients Odoo sont automatiquement approuvés
-          },
-          create: {
-            email: odooResult.client.email,
-            odooId: odooResult.client.id,
-            name: odooResult.client.name,
-            company: odooResult.client.company || null,
-            phone: odooResult.client.phone || null,
-            street: odooResult.client.street || null,
-            city: odooResult.client.city || null,
-            zip: odooResult.client.zip || null,
-            country: odooResult.client.country || null,
-            status: 'approved', // Les clients Odoo sont automatiquement approuvés
-          },
-        })
+            where: { email },
+            update: {
+              odooId: odooResult.client.id,
+              name: odooResult.client.name,
+              company: odooResult.client.company || null,
+              phone: odooResult.client.phone || null,
+              street: odooResult.client.street || null,
+              city: odooResult.client.city || null,
+              zip: odooResult.client.zip || null,
+              country: odooResult.client.country || null,
+              status: 'approved', // Les clients Odoo sont automatiquement approuvés
+            },
+            create: {
+              email: odooResult.client.email,
+              odooId: odooResult.client.id,
+              name: odooResult.client.name,
+              company: odooResult.client.company || null,
+              phone: odooResult.client.phone || null,
+              street: odooResult.client.street || null,
+              city: odooResult.client.city || null,
+              zip: odooResult.client.zip || null,
+              country: odooResult.client.country || null,
+              status: 'approved', // Les clients Odoo sont automatiquement approuvés
+            },
+          })
+        }
       } catch (syncError) {
         console.warn('⚠️  Erreur lors de la synchronisation avec la base locale:', syncError)
-        // On continue quand même, la connexion fonctionne
+        // On continue quand même, la connexion fonctionne via Odoo
       }
 
       return NextResponse.json({
