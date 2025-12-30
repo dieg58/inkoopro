@@ -8,12 +8,18 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Charger les prix des services depuis la base de données (avec cache)
+ * @param forceRefresh - Si true, ignore le cache et recharge depuis la DB
  */
-export async function loadServicePricing(): Promise<ServicePricing[]> {
-  // Vérifier le cache d'abord
-  const cached = cache.get<ServicePricing[]>(CACHE_KEY)
-  if (cached) {
-    return cached
+export async function loadServicePricing(forceRefresh: boolean = false): Promise<ServicePricing[]> {
+  // Vérifier le cache d'abord (sauf si forceRefresh est activé)
+  if (!forceRefresh) {
+    const cached = cache.get<ServicePricing[]>(CACHE_KEY)
+    if (cached) {
+      return cached
+    }
+  } else {
+    // Invalider le cache si on force le rechargement
+    cache.delete(CACHE_KEY)
   }
   try {
     const pricingRecords = await prisma.servicePricing.findMany()

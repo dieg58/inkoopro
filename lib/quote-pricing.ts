@@ -65,13 +65,41 @@ function calculateServicePriceDetails(
     const serigraphiePricing = pricing as any
     
     const quantityRange = findQuantityRange(totalQuantity, serigraphiePricing.quantityRanges)
-    if (!quantityRange) return null
+    if (!quantityRange) {
+      console.error('❌ Sérigraphie: Aucune fourchette de quantité trouvée pour', totalQuantity)
+      return null
+    }
     
     const key = `${quantityRange.label}-${colorCount}`
     const prices = textileType === 'clair' 
       ? (serigraphiePricing.pricesClair || serigraphiePricing.prices) 
       : (serigraphiePricing.pricesFonce || serigraphiePricing.prices)
-    const unitPrice = prices[key] || 0
+    
+    // Vérifier que prices existe et est un objet
+    if (!prices || typeof prices !== 'object') {
+      console.error('❌ Sérigraphie: prices est invalide', {
+        textileType,
+        hasPricesClair: !!serigraphiePricing.pricesClair,
+        hasPricesFonce: !!serigraphiePricing.pricesFonce,
+        hasPrices: !!serigraphiePricing.prices,
+        pricesType: typeof prices,
+      })
+      return null
+    }
+    
+    const unitPrice = prices[key]
+    if (unitPrice === undefined || unitPrice === null) {
+      console.error('❌ Sérigraphie: Prix non trouvé pour la clé', {
+        key,
+        quantity: totalQuantity,
+        quantityRange: quantityRange.label,
+        colorCount,
+        textileType,
+        availableKeys: Object.keys(prices).slice(0, 10), // Afficher les 10 premières clés
+        pricingKeys: Object.keys(serigraphiePricing),
+      })
+      return null
+    }
     
     const fixedFees = (serigraphiePricing.fixedFeePerColor || 0) * colorCount
     
