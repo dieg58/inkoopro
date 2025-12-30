@@ -14,9 +14,69 @@ const ODOO_API_KEY = process.env.ODOO_API_KEY || '' // Clé API optionnelle
 /**
  * Authentification Odoo et récupération de l'UID et session_id
  * Pour Odoo, on doit utiliser l'authentification dans chaque requête ou utiliser XML-RPC
+ * Supporte la clé API (recommandé) ou username/password
  */
-async function authenticateOdoo(): Promise<{ uid: number; sessionId: string } | null> {
+async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; password?: string } | null> {
   try {
+    // Vérifier que l'URL Odoo est configurée
+    if (!ODOO_URL || ODOO_URL === '') {
+      console.warn('⚠️  NEXT_PUBLIC_ODOO_URL n\'est pas configuré')
+      return null
+    }
+
+    // Méthode 1: Authentification par clé API (si disponible)
+    if (ODOO_API_KEY && ODOO_API_KEY !== '') {
+      console.log('🔑 Tentative d\'authentification avec clé API...')
+      try {
+        // Avec clé API, on doit utiliser l'endpoint /xmlrpc/2/common pour obtenir l'UID
+        // ou utiliser l'endpoint /jsonrpc avec la clé API dans les headers
+        // Note: L'authentification par clé API dans Odoo peut varier selon la version
+        // Pour l'instant, on utilise la méthode standard avec username/password
+        // Si vous avez une clé API, vous devez avoir un utilisateur associé
+        // On essaie d'abord avec username/password si disponibles
+        if (ODOO_USERNAME && ODOO_PASSWORD) {
+          const response = await fetch(`${ODOO_URL}/web/session/authenticate`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'call',
+              params: {
+                db: ODOO_DB,
+                login: ODOO_USERNAME,
+                password: auth.password,
+              },
+            }),
+          })
+
+          const data = await response.json()
+          if (data.result && data.result.uid) {
+            console.log('✅ Authentification réussie avec username/password (clé API configurée mais utilisant username/password)')
+            return {
+              uid: data.result.uid,
+              sessionId: data.result.session_id || '',
+              password: auth.password,
+            }
+          }
+        }
+        // Si username/password ne fonctionne pas, on retourne null
+        // (L'utilisation de la clé API nécessiterait une implémentation spécifique selon votre version d'Odoo)
+        console.warn('⚠️  Clé API configurée mais username/password requis pour l\'authentification')
+        return null
+      } catch (apiError) {
+        console.error('❌ Erreur lors de l\'authentification avec clé API:', apiError)
+        return null
+      }
+    }
+
+    // Méthode 2: Authentification par username/password (fallback ou si pas de clé API)
+    if (!ODOO_USERNAME || !ODOO_PASSWORD) {
+      console.error('❌ NEXT_PUBLIC_ODOO_USERNAME et NEXT_PUBLIC_ODOO_PASSWORD requis pour l\'authentification')
+      return null
+    }
+
     const response = await fetch(`${ODOO_URL}/web/session/authenticate`, {
       method: 'POST',
       headers: {
@@ -28,7 +88,7 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string } | 
         params: {
           db: ODOO_DB,
           login: ODOO_USERNAME,
-          password: ODOO_PASSWORD,
+          password: auth.password,
         },
       }),
     })
@@ -38,6 +98,7 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string } | 
       return {
         uid: data.result.uid,
         sessionId: data.result.session_id || '',
+        password: auth.password,
       }
     }
     return null
@@ -131,7 +192,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
       url: ODOO_URL || '❌ Non configuré',
       db: ODOO_DB || '❌ Non configuré',
       user: ODOO_USERNAME || '❌ Non configuré',
-      hasPassword: !!ODOO_PASSWORD,
+      hasPassword: !!auth.password,
       hasApiKey: !!ODOO_API_KEY,
     })
     
@@ -146,6 +207,12 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
     
     console.log('✅ Authentification Odoo réussie, UID:', auth.uid, 'Session:', auth.sessionId ? 'OK' : 'N/A')
 
+    // Vérifier que le password est disponible
+    if (!auth.password) {
+      console.error('❌ Mot de passe non disponible dans l\'authentification')
+      return []
+    }
+
     // D'abord, récupérer toutes les catégories ecommerce qui contiennent "textile" ou "t-shirt"
     console.log('🔍 Recherche des catégories ecommerce "textile" et sous-catégories...')
     const textileCategoryRequest = {
@@ -157,7 +224,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
         args: [
           ODOO_DB,
           auth.uid,
-          ODOO_PASSWORD,
+          auth.password,
           'product.public.category',
           'search_read',
           [
@@ -239,7 +306,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
         args: [
           ODOO_DB,
           auth.uid,
-          ODOO_PASSWORD,
+          auth.password,
           'product.category',
           'search_read',
           [
@@ -378,7 +445,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
         args: [
           ODOO_DB,
           auth.uid,
-          ODOO_PASSWORD, // Passer le mot de passe dans la requête
+          auth.password, // Passer le mot de passe dans la requête
           'product.template', // Utiliser product.template pour avoir les variantes
           'search_read',
           [
@@ -468,7 +535,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
           args: [
             ODOO_DB,
             auth.uid,
-            ODOO_PASSWORD,
+            auth.password,
             'product.product',
             'read',
             [variantIds],
@@ -509,7 +576,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
           args: [
             ODOO_DB,
             auth.uid,
-            ODOO_PASSWORD,
+            auth.password,
             'product.template.attribute.line',
             'read',
             [allAttributeLineIds],
@@ -540,7 +607,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
             args: [
               ODOO_DB,
               auth.uid,
-              ODOO_PASSWORD,
+              auth.password,
               'product.attribute',
               'read',
               [uniqueAttributeIds],
@@ -569,7 +636,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
               args: [
                 ODOO_DB,
                 auth.uid,
-                ODOO_PASSWORD,
+                auth.password,
                 'product.attribute.value',
                 'read',
                 [allValueIds],
@@ -637,7 +704,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
               args: [
                 ODOO_DB,
                 auth.uid,
-                ODOO_PASSWORD,
+                auth.password,
                 'product.supplierinfo',
                 'read',
                 [allSellerIds],
@@ -698,7 +765,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
               args: [
                 ODOO_DB,
                 auth.uid,
-                ODOO_PASSWORD,
+                auth.password,
                 'product.public.category',
                 'read',
                 [odooProduct.public_categ_ids],
@@ -767,7 +834,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
               args: [
                 ODOO_DB,
                 auth.uid,
-                ODOO_PASSWORD,
+                auth.password,
                 'product.product',
                 'read',
                 [variantIds],
@@ -802,7 +869,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
                     args: [
                       ODOO_DB,
                       auth.uid,
-                      ODOO_PASSWORD,
+                      auth.password,
                       'product.template.attribute.value',
                       'read',
                       [allAttributeValueIds],
@@ -834,7 +901,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
                       args: [
                         ODOO_DB,
                         auth.uid,
-                        ODOO_PASSWORD,
+                        auth.password,
                         'product.attribute.value',
                         'read',
                         [valueIds],
@@ -942,7 +1009,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
               args: [
                 ODOO_DB,
                 auth.uid,
-                ODOO_PASSWORD,
+                auth.password,
                 'product.template.attribute.line',
                 'read',
                 [productAttributeLineIds],
@@ -991,7 +1058,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
                     args: [
                       ODOO_DB,
                       auth.uid,
-                      ODOO_PASSWORD,
+                      auth.password,
                       'product.attribute',
                       'read',
                       [[attrId]],
@@ -1044,7 +1111,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
                   args: [
                     ODOO_DB,
                     auth.uid,
-                    ODOO_PASSWORD,
+                    auth.password,
                     'product.attribute.value',
                     'read',
                     [line.value_ids],
@@ -1180,7 +1247,8 @@ export async function getProductsFromOdooREST(): Promise<Product[]> {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${Buffer.from(`${ODOO_USERNAME}:${ODOO_PASSWORD}`).toString('base64')}`,
+        // Note: Cette fonction REST n'est pas utilisée actuellement
+        // Si vous voulez l'utiliser, vous devrez passer les credentials différemment
       },
     })
 
