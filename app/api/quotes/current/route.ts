@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientFromSession } from '@/lib/odoo-auth'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET - Récupérer le devis en cours du client connecté
  */

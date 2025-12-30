@@ -3,6 +3,8 @@ import { Quote } from '@/types'
 import { createQuoteInOdoo } from '@/lib/odoo'
 import { getClientFromSession } from '@/lib/odoo-auth'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     console.log('📥 Réception d\'une demande de création de devis')

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getClientFromSession } from '@/lib/odoo-auth'
 import { getClientOrders } from '@/lib/odoo-orders'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Vérifier l'authentification du client
