@@ -149,6 +149,9 @@ export async function verifyClientCredentials(
     }
 
     // Rechercher le client (partner) par email pour récupérer ses informations
+    let partners: any[] = []
+    
+    // D'abord, chercher le partenaire par email
     const searchRequest = {
       jsonrpc: '2.0',
       method: 'call',
@@ -184,8 +187,84 @@ export async function verifyClientCredentials(
       return { success: false, error: searchData.error.message || searchData.error.data?.message || 'Erreur lors de la recherche du client' }
     }
 
-    const partners = searchData.result || []
-    console.log(`📦 ${partners.length} partenaire(s) trouvé(s)`)
+    partners = searchData.result || []
+    console.log(`📦 ${partners.length} partenaire(s) trouvé(s) par email`)
+    
+    // Si aucun partenaire trouvé par email mais que l'authentification a réussi,
+    // chercher le partenaire lié à l'utilisateur Odoo
+    if (partners.length === 0 && passwordValid && userUid) {
+      console.log('🔍 Aucun partenaire trouvé par email, recherche du partenaire lié à l\'utilisateur Odoo...')
+      try {
+        // Récupérer l'utilisateur Odoo pour obtenir son partenaire_id
+        const userRequest = {
+          jsonrpc: '2.0',
+          method: 'call',
+          params: {
+            service: 'object',
+            method: 'execute_kw',
+            args: [
+              ODOO_DB,
+              auth.uid,
+              auth.password,
+              'res.users',
+              'read',
+              [[userUid]],
+              { fields: ['partner_id', 'login'] },
+            ],
+          },
+        }
+
+        const userResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userRequest),
+        })
+
+        const userData = await userResponse.json()
+        
+        if (!userData.error && userData.result && userData.result.length > 0) {
+          const user = userData.result[0]
+          const partnerId = Array.isArray(user.partner_id) ? user.partner_id[0] : user.partner_id
+          
+          if (partnerId) {
+            console.log('✅ Partenaire trouvé via utilisateur Odoo, ID:', partnerId)
+            // Récupérer les détails du partenaire
+            const partnerRequest = {
+              jsonrpc: '2.0',
+              method: 'call',
+              params: {
+                service: 'object',
+                method: 'execute_kw',
+                args: [
+                  ODOO_DB,
+                  auth.uid,
+                  auth.password,
+                  'res.partner',
+                  'read',
+                  [[partnerId]],
+                  { fields: ['id', 'name', 'email', 'phone', 'parent_id', 'is_company', 'street', 'city', 'zip', 'country_id'] },
+                ],
+              },
+            }
+
+            const partnerResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(partnerRequest),
+            })
+
+            const partnerData = await partnerResponse.json()
+            
+            if (!partnerData.error && partnerData.result && partnerData.result.length > 0) {
+              partners = partnerData.result
+              console.log('✅ Partenaire récupéré via utilisateur Odoo')
+            }
+          }
+        }
+      } catch (userError) {
+        console.warn('⚠️  Erreur lors de la recherche du partenaire via utilisateur:', userError)
+      }
+    }
     
     if (partners.length === 0) {
       console.warn('⚠️  Aucun partenaire trouvé avec l\'email:', email)
