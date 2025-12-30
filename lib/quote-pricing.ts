@@ -275,7 +275,7 @@ export async function calculateQuoteTotal(
     : 0
 
   // Cartons neufs
-  const cartonsCount = calculateCartons(selectedProducts)
+  const cartonsCount = calculateCartons(selectedProducts as any)
   const cartonCost = delivery.newCarton
     ? cartonsCount * (config.newCartonPrice || 0)
     : 0
