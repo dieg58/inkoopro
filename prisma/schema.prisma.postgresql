@@ -164,6 +164,8 @@ model PricingConfig {
   individualPackagingPrice Float   @default(0.10) // Prix par pièce pour l'emballage individuel (€ HT)
   newCartonPrice          Float   @default(2.00) // Prix par carton pour un carton neuf (€ HT)
   vectorizationPrice      Float   @default(25.00) // Prix pour la vectorisation d'un logo par le graphiste (€ HT)
+  courierPricePerKm       Float   @default(1.50) // Prix par km pour le coursier (€ HT)
+  courierMinimumFee       Float   @default(15.00) // Forfait minimum pour le coursier (€ HT)
   updatedAt               DateTime @updatedAt
 }
 
