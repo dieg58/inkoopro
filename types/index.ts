@@ -69,7 +69,7 @@ export interface SerigraphiePricing {
   pricesClair: Record<string, number> // Clé: "quantityRange-colorCount" pour textile clair
   pricesFonce: Record<string, number> // Clé: "quantityRange-colorCount" pour textile foncé
   fixedFeePerColor: number // Frais fixes par couleur (ex: 25€)
-  options: SerigraphieOption[] // Options disponibles avec leurs pourcentages
+  options?: Array<{ id: string; name: string; surchargePercentage: number }> // Options disponibles avec leurs pourcentages
 }
 
 // Prix pour la broderie (tableau croisé: quantité × nombre de points)
