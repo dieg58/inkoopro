@@ -31,6 +31,12 @@ export interface OdooClient {
  */
 async function authenticateOdoo(): Promise<{ uid: number; password: string } | null> {
   try {
+    // Vérifier que l'URL Odoo est configurée
+    if (!ODOO_URL || ODOO_URL === '') {
+      console.warn('⚠️  NEXT_PUBLIC_ODOO_URL n\'est pas configuré, impossible d\'authentifier avec Odoo')
+      return null
+    }
+    
     // Méthode 1: Utiliser /web/session/authenticate (comme dans lib/odoo-products.ts)
     const response = await fetch(`${ODOO_URL}/web/session/authenticate`, {
       method: 'POST',
@@ -97,6 +103,12 @@ export async function verifyClientCredentials(
     
     console.log('✅ Authentification système réussie, UID:', auth.uid)
 
+    // Vérifier que l'URL Odoo est configurée
+    if (!ODOO_URL || ODOO_URL === '') {
+      console.warn('⚠️  NEXT_PUBLIC_ODOO_URL n\'est pas configuré, impossible d\'authentifier avec Odoo')
+      return { success: false, error: 'Odoo non configuré' }
+    }
+    
     // D'abord, vérifier le mot de passe en essayant de s'authentifier directement avec l'email et le mot de passe
     // Cela vérifie si l'email correspond à un utilisateur Odoo (res.users) avec ce mot de passe
     console.log('🔐 Tentative d\'authentification Odoo avec email et mot de passe...')
