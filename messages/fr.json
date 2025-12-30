@@ -213,6 +213,8 @@
     "loginButton": "Se connecter",
     "invalidCredentials": "Identifiants invalides",
     "name": "Nom",
+    "company": "Entreprise",
+    "phone": "Téléphone",
     "loginTitle": "Connexion",
     "loginDescription": "Connectez-vous avec vos identifiants client pour créer un devis",
     "emailPlaceholder": "votre@email.com",
