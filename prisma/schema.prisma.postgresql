@@ -137,7 +137,9 @@ model ServicePricing {
   minQuantity     Int
   quantityRanges  String   // JSON array
   colorCounts     String?  // JSON array (pour sérigraphie)
-  pointRanges     String?  // JSON array (pour broderie)
+  pointRanges     String?  // JSON array (pour broderie) - Rétrocompatibilité
+  pointRangesPetite String? // JSON array pour petite broderie (max 10x10cm)
+  pointRangesGrande String? // JSON array pour grande broderie (max 20x25cm)
   dimensions      String?  // JSON array (pour DTF)
   prices          String   // JSON object (cross-table prices) - pour DTF uniquement
   pricesClair     String?  // JSON object pour sérigraphie textile clair
@@ -176,5 +178,35 @@ model ServiceOdooMapping {
   updatedAt       DateTime @updatedAt
   
   @@unique([technique, textileType])
+}
+
+// Mapping des frais fixes et options vers les produits Odoo
+model ServiceOdooFeeMapping {
+  id              String   @id @default(cuid())
+  mappingType     String   // 'fixedFee' | 'option'
+  technique       String   // 'serigraphie' | 'broderie' | 'dtf'
+  feeType         String?  // Pour fixedFee: 'colorFee' (sérigraphie), 'smallDigitization' | 'largeDigitization' (broderie)
+  optionId        String?  // Pour option: l'ID de l'option (ex: 'discharge', 'gold', 'phospho')
+  odooProductName String   // Nom du produit Odoo correspondant
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Mapping des méthodes de livraison vers les références produits Odoo (default_code)
+model DeliveryOdooMapping {
+  id              String   @id @default(cuid())
+  deliveryType    String   @unique // 'pickup' | 'dpd' | 'client_carrier' | 'courier'
+  odooProductCode String   // Référence interne (default_code) du produit Odoo
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Mapping des options (emballage individuel, cartons neufs, vectorisation) vers les références produits Odoo (default_code)
+model OptionOdooMapping {
+  id              String   @id @default(cuid())
+  optionType      String   @unique // 'individualPackaging' | 'newCarton' | 'vectorization'
+  odooProductCode String   // Référence interne (default_code) du produit Odoo
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
