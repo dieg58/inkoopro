@@ -21,7 +21,8 @@ export function middleware(request: NextRequest) {
       '/api/auth/me', 
       '/api/service-pricing', 
       '/api/pricing-config',
-      '/api/admin/login' // Route de connexion admin doit être publique
+      '/api/admin/login', // Route de connexion admin doit être publique
+      '/api/contact' // Formulaire de contact (public)
     ]
     if (publicApiRoutes.some(route => pathname.startsWith(route))) {
       return NextResponse.next()
