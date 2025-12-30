@@ -26,7 +26,7 @@ export async function loadServicePricing(): Promise<ServicePricing[]> {
     }
     
     // Convertir les enregistrements DB en format ServicePricing
-    return pricingRecords.map(record => {
+    const result = pricingRecords.map(record => {
       const base: any = {
         technique: record.technique as 'serigraphie' | 'broderie' | 'dtf',
         minQuantity: record.minQuantity,
