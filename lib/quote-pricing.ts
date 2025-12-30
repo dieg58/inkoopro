@@ -151,10 +151,31 @@ function calculateServicePriceDetails(
     const quantityRange = findQuantityRange(totalQuantity, broderiePricing.quantityRanges)
     if (!quantityRange) return null
     
-    const pointRange = broderiePricing.pointRanges.find((range: any) => 
+    // Utiliser la bonne fourchette de points selon la taille de broderie
+    const pointRanges = embroiderySize === 'petite' 
+      ? (broderiePricing.pointRangesPetite || broderiePricing.pointRanges) 
+      : (broderiePricing.pointRangesGrande || broderiePricing.pointRanges)
+    
+    if (!pointRanges || !Array.isArray(pointRanges)) {
+      console.error('❌ Broderie: pointRanges invalide', {
+        embroiderySize,
+        hasPointRangesPetite: !!broderiePricing.pointRangesPetite,
+        hasPointRangesGrande: !!broderiePricing.pointRangesGrande,
+        hasPointRanges: !!broderiePricing.pointRanges,
+      })
+      return null
+    }
+    
+    const pointRange = pointRanges.find((range: any) => 
       pointCount >= range.min && (range.max === null || pointCount <= range.max)
     )
-    if (!pointRange) return null
+    if (!pointRange) {
+      console.error('❌ Broderie: Aucune fourchette de points trouvée', {
+        pointCount,
+        availableRanges: pointRanges.map((r: any) => `${r.min}-${r.max}`),
+      })
+      return null
+    }
     
     const key = `${quantityRange.label}-${pointRange.label}`
     const prices = embroiderySize === 'petite' 
