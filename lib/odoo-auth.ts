@@ -177,7 +177,7 @@ export async function verifyClientCredentials(
     
     if (partners.length === 0) {
       console.warn('⚠️  Aucun partenaire trouvé avec l\'email:', email)
-      return { success: false, error: 'not_found', message: 'Aucun client trouvé avec cet email.' }
+      return { success: false, error: 'not_found' }
     }
 
     const partner = partners[0]

@@ -135,23 +135,6 @@ export async function POST(request: NextRequest) {
       },
       { status: 404 }
     )
-
-    if (result.success && result.client) {
-      console.log('✅ Connexion réussie, création de la session')
-      // Créer la session
-      await setClientSession(result.client)
-
-      return NextResponse.json({
-        success: true,
-        client: result.client,
-      })
-    } else {
-      console.error('❌ Échec de la connexion:', result.error)
-      return NextResponse.json(
-        { success: false, error: result.error || 'Identifiants incorrects' },
-        { status: 401 }
-      )
-    }
   } catch (error) {
     console.error('❌ Erreur API login:', error)
     return NextResponse.json(

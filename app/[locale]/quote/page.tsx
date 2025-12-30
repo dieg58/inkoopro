@@ -453,6 +453,7 @@ export default function QuotePage() {
         }, 0)
         
         items.push({
+          id: `${marking.id || Date.now()}-${productId}-${items.length}`,
           product: selectedProduct.product,
           clientProvided: selectedProduct.clientProvided,
           colorQuantities: selectedProduct.colorQuantities,

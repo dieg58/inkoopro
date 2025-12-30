@@ -141,12 +141,12 @@ export function ServicePricingManager() {
         } else {
           // Pour DTF, utiliser prices
           return {
-            ...p,
-            prices: {
-              ...p.prices,
-              [key]: value,
-            },
-          }
+          ...p,
+          prices: {
+            ...(p as any).prices,
+            [key]: value,
+          },
+        }
         }
       }
       return p
@@ -222,9 +222,9 @@ export function ServicePricingManager() {
         } else {
           // Pour DTF, utiliser prices
           const newPrices: Record<string, number> = {}
-          Object.entries(p.prices).forEach(([key, value]) => {
+          Object.entries((p as any).prices).forEach(([key, value]) => {
             if (!key.startsWith(rangeToRemove.label + '-')) {
-              newPrices[key] = value
+              newPrices[key] = value as number
             }
           })
           return {

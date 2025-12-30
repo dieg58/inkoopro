@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { ArrowLeft, Save } from 'lucide-react'
-import { DeliveryMethod } from '@/types'
+import { DeliveryType } from '@/types'
 import { AVAILABLE_COUNTRIES } from '@/lib/distance'
 
 interface DeliveryAddress {
@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const commonT = useTranslations('common')
   const deliveryT = useTranslations('delivery')
   const { toast } = useToast()
-  const [defaultDeliveryMethod, setDefaultDeliveryMethod] = useState<DeliveryMethod | ''>('')
+  const [defaultDeliveryMethod, setDefaultDeliveryMethod] = useState<DeliveryType | ''>('')
   const [defaultDeliveryAddress, setDefaultDeliveryAddress] = useState<DeliveryAddress | null>(null)
   const [billingAddress, setBillingAddress] = useState<DeliveryAddress | null>(null)
   const [loading, setLoading] = useState(true)
@@ -75,8 +75,8 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      // Convertir "none" en null pour l'API
-      const methodToSave = defaultDeliveryMethod === 'none' || defaultDeliveryMethod === '' ? null : defaultDeliveryMethod
+      // Convertir chaîne vide en null pour l'API
+      const methodToSave = defaultDeliveryMethod === '' ? null : defaultDeliveryMethod
       
       const response = await fetch('/api/client/settings', {
         method: 'PUT',
@@ -152,7 +152,7 @@ export default function SettingsPage() {
             </Label>
             <Select
               value={defaultDeliveryMethod || 'none'}
-              onValueChange={(value) => setDefaultDeliveryMethod(value === 'none' ? '' : (value as DeliveryMethod))}
+              onValueChange={(value) => setDefaultDeliveryMethod(value === 'none' ? '' : (value as DeliveryType))}
             >
               <SelectTrigger id="defaultDeliveryMethod">
                 <SelectValue placeholder={t('selectDeliveryMethod')} />

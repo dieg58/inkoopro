@@ -11,7 +11,7 @@ export interface DeliveryOdooMapping {
 export async function loadDeliveryOdooMapping(): Promise<DeliveryOdooMapping[]> {
   try {
     const mappings = await (prisma as any).deliveryOdooMapping.findMany()
-    const result = mappings.map(m => ({
+    const result = mappings.map((m: any) => ({
       deliveryType: m.deliveryType as 'pickup' | 'dpd' | 'client_carrier' | 'courier',
       odooProductCode: m.odooProductCode,
     }))
@@ -22,7 +22,7 @@ export async function loadDeliveryOdooMapping(): Promise<DeliveryOdooMapping[]> 
       await initializeDefaultDeliveryMappings()
       // Recharger après initialisation
       const newMappings = await (prisma as any).deliveryOdooMapping.findMany()
-      return newMappings.map(m => ({
+      return newMappings.map((m: any) => ({
         deliveryType: m.deliveryType as 'pickup' | 'dpd' | 'client_carrier' | 'courier',
         odooProductCode: m.odooProductCode,
       }))

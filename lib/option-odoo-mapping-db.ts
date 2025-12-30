@@ -11,7 +11,7 @@ export interface OptionOdooMapping {
 export async function loadOptionOdooMapping(): Promise<OptionOdooMapping[]> {
   try {
     const mappings = await (prisma as any).optionOdooMapping.findMany()
-    const result = mappings.map(m => ({
+    const result = mappings.map((m: any) => ({
       optionType: m.optionType as 'individualPackaging' | 'newCarton' | 'vectorization',
       odooProductCode: m.odooProductCode,
     }))
@@ -22,7 +22,7 @@ export async function loadOptionOdooMapping(): Promise<OptionOdooMapping[]> {
       await initializeDefaultOptionMappings()
       // Recharger après initialisation
       const newMappings = await (prisma as any).optionOdooMapping.findMany()
-      return newMappings.map(m => ({
+      return newMappings.map((m: any) => ({
         optionType: m.optionType as 'individualPackaging' | 'newCarton' | 'vectorization',
         odooProductCode: m.odooProductCode,
       }))

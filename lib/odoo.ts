@@ -787,7 +787,7 @@ async function findOdooProductByCode(
         taxes_id: product.taxes_id && Array.isArray(product.taxes_id) ? product.taxes_id : [],
         type: product.type || 'service',
         sale_ok: product.sale_ok || false,
-      }
+      } as any
     } else {
       console.log(`⚠️ Produit Odoo avec référence "${trimmedCode}" non trouvé dans Odoo`)
       console.log(`   → Vérifiez que le produit existe avec la référence interne exacte: "${trimmedCode}"`)

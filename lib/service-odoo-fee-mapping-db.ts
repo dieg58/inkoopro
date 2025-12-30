@@ -33,7 +33,7 @@ export async function loadServiceOdooFeeMappings(): Promise<ServiceOdooFeeMappin
       })
     })
     
-    return mappings.map(m => ({
+    return mappings.map((m: any) => ({
       id: m.id,
       mappingType: m.mappingType as FeeMappingType,
       technique: m.technique as 'serigraphie' | 'broderie' | 'dtf',
@@ -148,7 +148,7 @@ export async function saveServiceOdooFeeMappings(mappings: ServiceOdooFeeMapping
       }
       return isValid
     })
-    .map(m => ({
+    .map((m: any) => ({
       ...m,
       // S'assurer que les champs optionnels sont undefined (seront convertis en null dans saveServiceOdooFeeMapping)
       feeType: m.feeType || undefined,

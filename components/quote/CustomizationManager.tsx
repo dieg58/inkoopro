@@ -18,8 +18,8 @@ interface Marking {
   technique: TechniqueType | null
   techniqueOptions: TechniqueOptions | null
   position: Position | null
-  files: Array<{ id: string; name: string; url: string; size: number; type: string }>
-  notes: string
+  files?: Array<{ id: string; name: string; url: string; size: number; type: string }>
+  notes?: string
   vectorization?: boolean // Vectorisation du logo par le graphiste (option payante)
 }
 
@@ -204,7 +204,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
       technique: currentMarking.technique,
       techniqueOptions: currentMarking.techniqueOptions,
       position: currentMarking.position,
-      files: [...currentMarking.files],
+      files: currentMarking.files ? [...currentMarking.files] : [],
       notes: currentMarking.notes,
         vectorization: currentMarking.vectorization,
     }
@@ -384,14 +384,14 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                     position,
                   })
                 }}
-                files={currentMarking.files}
+                files={currentMarking.files || []}
                 onFilesChange={(files) => {
                   setCurrentMarking({
                     ...currentMarking,
                     files,
                   })
                 }}
-                notes={currentMarking.notes}
+                notes={currentMarking.notes || ''}
                 onNotesChange={(notes) => {
                   setCurrentMarking({
                     ...currentMarking,

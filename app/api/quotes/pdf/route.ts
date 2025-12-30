@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
             }
             // Options supplémentaires
             if (opts.selectedOptions && opts.selectedOptions.length > 0) {
-              const serigraphiePricing = servicePricing.find((p: any) => p.technique === 'serigraphie')
+              const serigraphiePricing = servicePricing.find((p: any) => p.technique === 'serigraphie') as any
               const optionsLabels = opts.selectedOptions.map((optId: string) => {
                 const option = serigraphiePricing?.options?.find((opt: any) => opt.id === optId)
                 return option ? option.name : optId

@@ -562,19 +562,19 @@ export function OrderSummary({
       try {
         // Charger la config de prix si nécessaire
         let config = pricingConfig
-        if (!config || (!config.courierPricePerKm && delivery?.type === 'courier')) {
+        if (!config || (!(config as any).courierPricePerKm && delivery?.type === 'courier')) {
           const response = await fetch('/api/pricing-config')
           const data = await response.json()
           if (data.success && data.config) {
             config = {
               courierPricePerKm: data.config.courierPricePerKm,
               courierMinimumFee: data.config.courierMinimumFee,
-            }
+            } as any
           }
         }
         
         const { calculateShippingCost } = await import('@/lib/shipping')
-        const cost = await calculateShippingCost(selectedProducts, delivery, config)
+        const cost = await calculateShippingCost(selectedProducts, delivery, config as any)
         setShippingCost(cost)
       } catch (error) {
         console.error('Erreur calcul frais de port:', error)
@@ -740,7 +740,7 @@ export function OrderSummary({
                 const opts = marking.techniqueOptions as any
                 const textileLabel = opts.textileType === 'fonce' ? summaryT('darkTextile') : summaryT('lightTextile')
                 const selectedOptions = opts.selectedOptions || []
-                const serigraphiePricing = servicePricing.find((p: any) => p.technique === 'serigraphie')
+                const serigraphiePricing = servicePricing.find((p: any) => p.technique === 'serigraphie') as any
                 const optionsLabels = selectedOptions.map((optId: string) => {
                   const option = serigraphiePricing?.options?.find((opt: any) => opt.id === optId)
                   return option ? option.name : optId

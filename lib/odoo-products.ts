@@ -202,7 +202,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
     // Si pas trouvée exactement, prendre la première qui contient "textile"
     if (!textilePublicCategoryId && textileCategories.length > 0) {
       // Chercher une catégorie sans parent qui contient "textile"
-      const parentCategory = textileCategories.find(cat => 
+      const parentCategory = textileCategories.find((cat: any) => 
         cat.name.toLowerCase().includes('textile') && (!cat.parent_id || cat.parent_id.length === 0)
       )
       if (parentCategory) {
@@ -283,7 +283,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
     
     if (!textileProductCategoryId && productCategories.length > 0) {
       // Chercher une catégorie sans parent qui contient "textile"
-      const parentCategory = productCategories.find(cat => 
+      const parentCategory = productCategories.find((cat: any) => 
         cat.name.toLowerCase().includes('textile') && (!cat.parent_id || cat.parent_id.length === 0)
       )
       if (parentCategory) {

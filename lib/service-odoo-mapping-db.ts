@@ -12,7 +12,7 @@ export interface ServiceOdooMapping {
 export async function loadServiceOdooMapping(): Promise<ServiceOdooMapping[]> {
   try {
     const mappings = await prisma.serviceOdooMapping.findMany()
-    const result = mappings.map(m => ({
+    const result = mappings.map((m: any) => ({
       technique: m.technique as 'serigraphie' | 'broderie' | 'dtf',
       odooProductName: m.odooProductName,
       textileType: m.textileType as 'clair' | 'fonce' | undefined,
@@ -24,7 +24,7 @@ export async function loadServiceOdooMapping(): Promise<ServiceOdooMapping[]> {
       await initializeDefaultMappings()
       // Recharger après initialisation
       const newMappings = await prisma.serviceOdooMapping.findMany()
-      return newMappings.map(m => ({
+      return newMappings.map((m: any) => ({
         technique: m.technique as 'serigraphie' | 'broderie' | 'dtf',
         odooProductName: m.odooProductName,
         textileType: m.textileType as 'clair' | 'fonce' | undefined,
@@ -85,7 +85,7 @@ export async function getOdooProductNameForTechnique(
 ): Promise<string | null> {
   try {
     const mappings = await loadServiceOdooMapping()
-    console.log(`📋 Mappings disponibles:`, mappings.map(m => ({
+    console.log(`📋 Mappings disponibles:`, mappings.map((m: any) => ({
       technique: m.technique,
       textileType: m.textileType,
       odooProductName: m.odooProductName
