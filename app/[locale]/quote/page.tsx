@@ -394,17 +394,28 @@ export default function QuotePage() {
 
   const handleDownloadPDF = async () => {
     try {
+      // Construire les items du devis dans le bon format
+      const items = buildQuoteItems()
+      
+      if (items.length === 0) {
+        toast({
+          title: commonT('error'),
+          description: 'Aucun article dans le devis. Veuillez ajouter des produits et des marquages.',
+          variant: 'destructive',
+        })
+        return
+      }
+
       const response = await fetch('/api/quotes/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: quoteTitle,
-          selectedProducts,
-          quoteItems,
-          currentMarkings,
+          items, // Utiliser les items construits
           delivery,
           delay,
           clientInfo,
+          createdAt: new Date().toISOString(),
         }),
       })
 

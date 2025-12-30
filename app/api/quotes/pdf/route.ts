@@ -6,15 +6,47 @@ import { positionLabels } from '@/lib/data'
 import { loadServicePricing } from '@/lib/service-pricing-db'
 import { getIndicationDate, getDeliveryDate, formatDate } from '@/lib/delivery-dates'
 
+// Forcer l'utilisation du runtime Node.js (pas Edge) pour avoir accès à Buffer
+export const runtime = 'nodejs'
+
 /**
  * POST - Générer un PDF du devis
  */
 export async function POST(request: NextRequest) {
   try {
-    const quote: Quote = await request.json()
+    const quoteData = await request.json()
+    console.log('📄 Génération PDF - Données reçues:', {
+      hasItems: !!quoteData.items,
+      hasQuoteItems: !!quoteData.quoteItems,
+      hasCurrentMarkings: !!quoteData.currentMarkings,
+      itemsCount: quoteData.items?.length || quoteData.quoteItems?.length || 0,
+    })
+
+    // Construire le devis dans le bon format
+    const quote: Quote = {
+      title: quoteData.title,
+      items: quoteData.items || quoteData.quoteItems || [],
+      delivery: quoteData.delivery,
+      delay: quoteData.delay,
+      clientInfo: quoteData.clientInfo,
+      createdAt: quoteData.createdAt || new Date().toISOString(),
+    }
+
+    if (!quote.items || quote.items.length === 0) {
+      console.error('❌ PDF: Aucun article dans le devis')
+      return NextResponse.json(
+        { success: false, error: 'Le devis doit contenir au moins un article' },
+        { status: 400 }
+      )
+    }
 
     // Calculer les totaux
+    console.log('📊 PDF: Calcul des totaux...')
     const quoteTotal = await calculateQuoteTotal(quote.items, quote.delivery, quote.delay)
+    console.log('✅ PDF: Totaux calculés:', {
+      servicesTotal: quoteTotal.servicesTotal,
+      grandTotal: quoteTotal.grandTotal,
+    })
 
     // Charger les prix des services pour obtenir les noms des options
     const servicePricing = await loadServicePricing()
@@ -440,8 +472,24 @@ export async function POST(request: NextRequest) {
     yPosition += 7
 
     // Générer le PDF côté serveur (utiliser un Buffer Node)
+    console.log('📄 PDF: Génération du buffer...')
     const pdfArrayBuffer = doc.output('arraybuffer')
+    
+    // Vérifier que Buffer est disponible
+    if (typeof Buffer === 'undefined') {
+      console.error('❌ PDF: Buffer n\'est pas disponible (Edge Runtime?)')
+      // Fallback: utiliser Uint8Array et convertir
+      const uint8Array = new Uint8Array(pdfArrayBuffer)
+      return new NextResponse(uint8Array, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="devis_${quote.title?.replace(/[^a-z0-9]/gi, '_') || 'sans_titre'}_${new Date().toISOString().split('T')[0]}.pdf"`,
+        },
+      })
+    }
+    
     const pdfBuffer = Buffer.from(pdfArrayBuffer)
+    console.log('✅ PDF: Buffer généré, taille:', pdfBuffer.length)
 
     return new NextResponse(pdfBuffer, {
       headers: {
@@ -450,9 +498,17 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Erreur lors de la génération du PDF:', error)
+    console.error('❌ Erreur lors de la génération du PDF:', error)
+    if (error instanceof Error) {
+      console.error('   Message:', error.message)
+      console.error('   Stack:', error.stack)
+    }
     return NextResponse.json(
-      { success: false, error: 'Erreur lors de la génération du PDF' },
+      { 
+        success: false, 
+        error: 'Erreur lors de la génération du PDF',
+        details: error instanceof Error ? error.message : 'Erreur inconnue'
+      },
       { status: 500 }
     )
   }
