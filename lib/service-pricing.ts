@@ -139,7 +139,7 @@ export function calculateSerigraphiePrice(
   if (!quantityRange) return null
   
   const key = `${quantityRange.label}-${colorCount}`
-  const unitPrice = pricing.prices[key]
+  const unitPrice = (pricing as any).prices?.[key] || (pricing as any).pricesClair?.[key] || (pricing as any).pricesFonce?.[key]
   if (unitPrice === null || unitPrice === undefined) return null
   
   // Prix unitaire × quantité + frais fixes (25€ par couleur)
