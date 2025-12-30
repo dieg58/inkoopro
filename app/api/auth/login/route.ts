@@ -28,7 +28,11 @@ export async function POST(request: NextRequest) {
 
       // Optionnellement, synchroniser les données dans la base locale
       try {
-        await prisma.client.upsert({
+        // Vérifier d'abord si DATABASE_URL est configuré
+        if (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:')) {
+          console.warn('⚠️  DATABASE_URL non configuré ou SQLite, skip sync locale')
+        } else {
+          await prisma.client.upsert({
           where: { email },
           update: {
             odooId: odooResult.client.id,
@@ -67,9 +71,30 @@ export async function POST(request: NextRequest) {
 
     // Si le client n'existe pas dans Odoo, vérifier dans la base locale
     console.log('🔍 Client non trouvé dans Odoo, vérification dans la base locale...')
-    const localClient = await prisma.client.findUnique({
-      where: { email },
-    })
+    let localClient = null
+    try {
+      localClient = await prisma.client.findUnique({
+        where: { email },
+      })
+    } catch (dbError) {
+      console.error('❌ Erreur lors de l\'accès à la base de données:', dbError)
+      // Si c'est une erreur de connexion, on peut toujours essayer avec Odoo uniquement
+      // ou retourner une erreur plus explicite
+      if (dbError instanceof Error && (
+        dbError.message.includes('Prisma') || 
+        dbError.message.includes('DATABASE_URL') ||
+        dbError.message.includes('connection')
+      )) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Erreur de connexion à la base de données. Veuillez contacter l\'administrateur.' 
+          },
+          { status: 500 }
+        )
+      }
+      throw dbError // Re-lancer les autres erreurs
+    }
 
     if (localClient) {
       // Vérifier le statut
@@ -127,6 +152,21 @@ export async function POST(request: NextRequest) {
 
     // Si aucun compte trouvé ni dans Odoo ni dans la base locale
     console.error('❌ Aucun compte trouvé pour:', email)
+    
+    // Si la base locale n'est pas accessible et que Odoo n'a pas trouvé le client,
+    // on retourne une erreur plus explicite
+    if (!localClient && (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:'))) {
+      // Si on n'a pas de base PostgreSQL configurée, on ne peut que se baser sur Odoo
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'not_found',
+          message: 'Vous n\'êtes pas encore client chez nous. Créez votre compte pour accéder à nos services !'
+        },
+        { status: 404 }
+      )
+    }
+    
     return NextResponse.json(
       { 
         success: false, 
@@ -137,6 +177,28 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('❌ Erreur API login:', error)
+    
+    // Log détaillé de l'erreur pour le debugging
+    if (error instanceof Error) {
+      console.error('❌ Détails de l\'erreur:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      })
+      
+      // Si c'est une erreur Prisma
+      if (error.message.includes('Prisma') || error.message.includes('DATABASE_URL')) {
+        console.error('❌ Erreur de connexion à la base de données')
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Erreur de connexion à la base de données. Veuillez contacter l\'administrateur.' 
+          },
+          { status: 500 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { success: false, error: 'Erreur serveur' },
       { status: 500 }
