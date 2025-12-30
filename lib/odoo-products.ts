@@ -192,7 +192,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
       url: ODOO_URL || '❌ Non configuré',
       db: ODOO_DB || '❌ Non configuré',
       user: ODOO_USERNAME || '❌ Non configuré',
-      hasPassword: !!auth.password,
+      hasPassword: !!ODOO_PASSWORD,
       hasApiKey: !!ODOO_API_KEY,
     })
     
