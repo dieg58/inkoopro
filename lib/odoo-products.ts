@@ -57,7 +57,7 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
             return {
               uid: data.result.uid,
               sessionId: data.result.session_id || '',
-              password: auth.password,
+              password: ODOO_PASSWORD,
             }
           }
         }
@@ -85,11 +85,11 @@ async function authenticateOdoo(): Promise<{ uid: number; sessionId: string; pas
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'call',
-        params: {
-          db: ODOO_DB,
-          login: ODOO_USERNAME,
-          password: auth.password,
-        },
+          params: {
+            db: ODOO_DB,
+            login: ODOO_USERNAME,
+            password: ODOO_PASSWORD,
+          },
       }),
     })
 
