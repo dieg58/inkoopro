@@ -41,7 +41,15 @@ export default async function LocaleLayout({
   // Providing all messages to the client
   // side is the easiest way to get started
   // Pass locale explicitly to getMessages
-  const messages = await getMessages({ locale })
+  // Gérer les erreurs lors du chargement des messages
+  let messages
+  try {
+    messages = await getMessages({ locale })
+  } catch (error) {
+    console.error('Erreur lors du chargement des messages:', error)
+    // En cas d'erreur, utiliser un objet vide pour éviter les erreurs de rendu
+    messages = {}
+  }
 
   return (
     <html lang={locale}>

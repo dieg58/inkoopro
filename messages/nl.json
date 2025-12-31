@@ -192,6 +192,8 @@
     "loginButton": "Inloggen",
     "invalidCredentials": "Ongeldige inloggegevens",
     "name": "Naam",
+    "company": "Bedrijf",
+    "phone": "Telefoon",
     "loginTitle": "Inloggen",
     "loginDescription": "Log in met uw klantgegevens om een offerte aan te maken",
     "emailPlaceholder": "uw@email.com",
