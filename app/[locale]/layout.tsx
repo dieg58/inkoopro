@@ -45,10 +45,27 @@ export default async function LocaleLayout({
   let messages
   try {
     messages = await getMessages({ locale })
+    // Vérifier que les messages ne sont pas vides
+    if (!messages || Object.keys(messages).length === 0) {
+      console.warn(`⚠️ Aucun message trouvé pour la locale: ${locale}`)
+      // Essayer de charger les messages en français comme fallback
+      try {
+        messages = await getMessages({ locale: 'fr' })
+      } catch (fallbackError) {
+        console.error('Erreur lors du chargement des messages de fallback:', fallbackError)
+        messages = {}
+      }
+    }
   } catch (error) {
     console.error('Erreur lors du chargement des messages:', error)
-    // En cas d'erreur, utiliser un objet vide pour éviter les erreurs de rendu
-    messages = {}
+    // En cas d'erreur, essayer de charger les messages en français comme fallback
+    try {
+      messages = await getMessages({ locale: 'fr' })
+    } catch (fallbackError) {
+      console.error('Erreur lors du chargement des messages de fallback:', fallbackError)
+      // En dernier recours, utiliser un objet vide pour éviter les erreurs de rendu
+      messages = {}
+    }
   }
 
   return (

@@ -12,6 +12,12 @@ const intlMiddleware = createMiddleware({
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
+  // Ignorer les fichiers statiques (favicon, icon, robots.txt, etc.)
+  const staticFiles = ['/favicon.ico', '/favicon.png', '/icon.svg', '/icon.png', '/icon.ico', '/robots.txt', '/sitemap.xml']
+  if (staticFiles.some(file => pathname === file || pathname.endsWith(file))) {
+    return NextResponse.next()
+  }
+
   // Éviter les erreurs lors du prerendering en retournant directement pour les routes statiques
   // Le prerendering n'a pas accès aux cookies, donc on évite les vérifications d'authentification
   // Détecter le prerendering via plusieurs méthodes
@@ -192,9 +198,10 @@ export const config = {
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)
      * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * - favicon.ico, favicon.png, icon.* (favicon files)
+     * - robots.txt, sitemap.xml (SEO files)
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|favicon.png|icon.svg|icon.png|icon.ico|robots.txt|sitemap.xml).*)',
   ],
 }
 
