@@ -18,8 +18,16 @@ interface ContactFormProps {
 type RequestType = 'pricing' | 'bug' | 'info' | 'improvement' | 'other'
 
 export function ContactForm({ open, onOpenChange }: ContactFormProps) {
-  const t = useTranslations('contact')
-  const commonT = useTranslations('common')
+  // Ne pas utiliser 'contact' car les traductions n'existent pas encore
+  // Utiliser des valeurs par défaut si les traductions échouent
+  let commonT
+  try {
+    commonT = useTranslations('common')
+  } catch (error) {
+    console.error('Erreur lors du chargement des traductions:', error)
+    // Fallback pour éviter les erreurs
+    commonT = { error: () => 'Erreur' } as any
+  }
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
