@@ -1,6 +1,8 @@
 import { AdminLayout } from '@/components/admin/AdminLayout'
 import { QuoteManager } from '@/components/admin/QuoteManager'
 
+export const dynamic = 'force-dynamic'
+
 export default function QuotesPage() {
   return (
     <AdminLayout>

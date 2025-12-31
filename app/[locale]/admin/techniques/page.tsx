@@ -4,6 +4,8 @@ import { ServicePricingManager } from '@/components/admin/ServicePricingManager'
 import { ServiceOdooMappingManager } from '@/components/admin/ServiceOdooMappingManager'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+export const dynamic = 'force-dynamic'
+
 export default function TechniquesPage() {
   return (
     <AdminLayout>

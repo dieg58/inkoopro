@@ -12,6 +12,11 @@ const intlMiddleware = createMiddleware({
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
+  // Éviter les erreurs lors du prerendering en retournant directement pour les routes statiques
+  // Le prerendering n'a pas accès aux cookies, donc on évite les vérifications d'authentification
+  const isPrerendering = request.headers.get('x-prerender-revalidate') !== null || 
+                         request.headers.get('x-middleware-preflight') !== null
+
   // Les routes API ne doivent pas passer par next-intl
   if (pathname.startsWith('/api/')) {
     // Routes publiques API (pas de protection)
@@ -66,6 +71,12 @@ export function middleware(request: NextRequest) {
   const publicRoutes = ['/login', '/register', '/admin/login']
   // La page d'accueil (/) est publique
   if (pathnameWithoutLocale === '/' || publicRoutes.some(route => pathnameWithoutLocale.startsWith(route))) {
+    return response
+  }
+
+  // Lors du prerendering, retourner la réponse sans vérification d'authentification
+  // pour éviter les erreurs (les cookies ne sont pas disponibles)
+  if (isPrerendering) {
     return response
   }
 

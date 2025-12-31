@@ -1,6 +1,8 @@
 import { AdminLayout } from '@/components/admin/AdminLayout'
 import { PricingConfigManager } from '@/components/admin/PricingConfigManager'
 
+export const dynamic = 'force-dynamic'
+
 export default function PricingConfigPage() {
   return (
     <AdminLayout>
