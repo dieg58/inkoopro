@@ -14,8 +14,12 @@ export function middleware(request: NextRequest) {
 
   // Éviter les erreurs lors du prerendering en retournant directement pour les routes statiques
   // Le prerendering n'a pas accès aux cookies, donc on évite les vérifications d'authentification
-  const isPrerendering = request.headers.get('x-prerender-revalidate') !== null || 
-                         request.headers.get('x-middleware-preflight') !== null
+  // Détecter le prerendering via plusieurs méthodes
+  const isPrerendering = 
+    request.headers.get('x-prerender-revalidate') !== null || 
+    request.headers.get('x-middleware-preflight') !== null ||
+    request.headers.get('x-vercel-id') === null || // Pas de header Vercel = prerendering
+    process.env.NEXT_PHASE === 'phase-production-build' // Build time
 
   // Les routes API ne doivent pas passer par next-intl
   if (pathname.startsWith('/api/')) {

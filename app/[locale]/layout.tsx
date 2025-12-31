@@ -15,9 +15,13 @@ export const metadata: Metadata = {
   description: "Créez votre devis personnalisé pour impression et broderie textile",
 }
 
-export function generateStaticParams() {
-  return locales.map((locale) => ({ locale }))
-}
+// Désactiver le prerendering car les pages utilisent des cookies et des données dynamiques
+export const dynamic = 'force-dynamic'
+
+// Ne pas générer de paramètres statiques pour éviter le prerendering
+// export function generateStaticParams() {
+//   return locales.map((locale) => ({ locale }))
+// }
 
 export default async function LocaleLayout({
   children,
