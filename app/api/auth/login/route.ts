@@ -25,17 +25,58 @@ export async function POST(request: NextRequest) {
 
     if (odooResult.success && odooResult.client) {
       console.log('✅ Client trouvé dans Odoo, connexion réussie')
+      const client = odooResult.client // Stocker dans une variable pour TypeScript
+      
       // Créer la session
-      await setClientSession(odooResult.client)
+      await setClientSession(client)
+      
+      // Optionnellement, synchroniser les données dans la base locale
+      try {
+        // Vérifier d'abord si DATABASE_URL est configuré pour PostgreSQL
+        const databaseUrl = process.env.DATABASE_URL
+        if (databaseUrl && !databaseUrl.startsWith('file:')) {
+          await prisma.client.upsert({
+            where: { email },
+            update: {
+              odooId: client.id,
+              name: client.name,
+              company: client.company || null,
+              phone: client.phone || null,
+              street: client.street || null,
+              city: client.city || null,
+              zip: client.zip || null,
+              country: client.country || null,
+              status: 'approved', // Les clients Odoo sont automatiquement approuvés
+            },
+            create: {
+              email: client.email,
+              odooId: client.id,
+              name: client.name,
+              company: client.company || null,
+              phone: client.phone || null,
+              street: client.street || null,
+              city: client.city || null,
+              zip: client.zip || null,
+              country: client.country || null,
+              status: 'approved', // Les clients Odoo sont automatiquement approuvés
+            },
+          })
+        } else {
+          console.warn('⚠️  DATABASE_URL non configuré ou SQLite, skip sync locale')
+        }
+      } catch (syncError) {
+        console.warn('⚠️  Erreur lors de la synchronisation avec la base locale:', syncError)
+        // On continue quand même, la connexion fonctionne via Odoo
+      }
       
       // Créer aussi le cookie directement dans la réponse pour s'assurer qu'il est bien défini
       const response = NextResponse.json({
         success: true,
-        client: odooResult.client,
+        client: client,
       })
       
       // Définir le cookie dans la réponse
-      response.cookies.set('odoo_client', JSON.stringify(odooResult.client), {
+      response.cookies.set('odoo_client', JSON.stringify(client), {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
@@ -44,49 +85,6 @@ export async function POST(request: NextRequest) {
       })
       
       return response
-
-      // Optionnellement, synchroniser les données dans la base locale
-      try {
-        // Vérifier d'abord si DATABASE_URL est configuré pour PostgreSQL
-        if (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:')) {
-          console.warn('⚠️  DATABASE_URL non configuré ou SQLite, skip sync locale')
-        } else {
-          await prisma.client.upsert({
-            where: { email },
-            update: {
-              odooId: odooResult.client.id,
-              name: odooResult.client.name,
-              company: odooResult.client.company || null,
-              phone: odooResult.client.phone || null,
-              street: odooResult.client.street || null,
-              city: odooResult.client.city || null,
-              zip: odooResult.client.zip || null,
-              country: odooResult.client.country || null,
-              status: 'approved', // Les clients Odoo sont automatiquement approuvés
-            },
-            create: {
-              email: odooResult.client.email,
-              odooId: odooResult.client.id,
-              name: odooResult.client.name,
-              company: odooResult.client.company || null,
-              phone: odooResult.client.phone || null,
-              street: odooResult.client.street || null,
-              city: odooResult.client.city || null,
-              zip: odooResult.client.zip || null,
-              country: odooResult.client.country || null,
-              status: 'approved', // Les clients Odoo sont automatiquement approuvés
-            },
-          })
-        }
-      } catch (syncError) {
-        console.warn('⚠️  Erreur lors de la synchronisation avec la base locale:', syncError)
-        // On continue quand même, la connexion fonctionne via Odoo
-      }
-
-      return NextResponse.json({
-        success: true,
-        client: odooResult.client,
-      })
     }
 
     // Si le client n'existe pas dans Odoo, vérifier dans la base locale
@@ -187,7 +185,8 @@ export async function POST(request: NextRequest) {
     
     // Si la base locale n'est pas accessible et que Odoo n'a pas trouvé le client,
     // on retourne une erreur plus explicite
-    if (!localClient && (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:'))) {
+    const databaseUrl = process.env.DATABASE_URL
+    if (!localClient && (!databaseUrl || (databaseUrl && databaseUrl.startsWith('file:')))) {
       // Si on n'a pas de base PostgreSQL configurée, on ne peut que se baser sur Odoo
       return NextResponse.json(
         { 
