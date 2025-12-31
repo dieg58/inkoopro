@@ -43,6 +43,11 @@ NEXT_PUBLIC_ODOO_PASSWORD=votre_mot_de_passe
 
 # Mot de passe admin (à changer absolument en production)
 ADMIN_PASSWORD=votre_mot_de_passe_admin_securise
+
+# Resend (pour le formulaire de contact)
+RESEND_API_KEY=re_h544tgd3_6p7U7ZSynxkGPiQF4zu4zmFQ
+CONTACT_EMAIL=hello@inkoo.eu
+RESEND_FROM_EMAIL=onboarding@resend.dev  # Utiliser votre domaine vérifié dans Resend
 ```
 
 **⚠️ Important** : Changez le mot de passe admin par défaut (`admin123`) en production !

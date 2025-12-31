@@ -75,7 +75,25 @@ Value: votre_mot_de_passe_admin_securise
 Environments: ☑ Production ☑ Preview ☑ Development
 ```
 
-#### 4. Environment
+#### 4. Resend (pour le formulaire de contact)
+```
+Name: RESEND_API_KEY
+Value: re_h544tgd3_6p7U7ZSynxkGPiQF4zu4zmFQ
+Environments: ☑ Production ☑ Preview ☑ Development
+```
+
+```
+Name: CONTACT_EMAIL
+Value: hello@inkoo.eu
+Environments: ☑ Production ☑ Preview ☑ Development
+```
+
+**Note :** Pour utiliser votre propre domaine d'envoi dans Resend :
+1. Allez sur https://resend.com/domains
+2. Ajoutez et vérifiez votre domaine (ex: inkoo.eu)
+3. Ajoutez la variable `RESEND_FROM_EMAIL` avec votre adresse vérifiée (ex: noreply@inkoo.eu)
+
+#### 5. Environment
 ```
 Name: NODE_ENV
 Value: production
