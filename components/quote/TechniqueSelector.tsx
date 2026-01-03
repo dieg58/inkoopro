@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { TechniqueType, TechniqueOptions, SerigraphieOptions, BroderieOptions, DTFOptions, TextileType, Position, PositionType, ProductCategory } from '@/types'
+import { TechniqueType, TechniqueOptions, SerigraphieOptions, BroderieOptions, DTFOptions, TextileType, Position, PositionType, ProductCategory, PantoneColor } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
-import { techniques, techniqueConfig, availableDimensions, positionConfig, positionLabels } from '@/lib/data'
+import { techniques, techniqueConfig, positionConfig, positionLabels, embroideryTypographies, dtfTypographies, basePantoneColors } from '@/lib/data'
+import { ServicePricing } from '@/types'
 import { Plus, Trash2, Upload, X } from 'lucide-react'
 
 interface TechniqueSelectorProps {
@@ -24,7 +25,7 @@ interface TechniqueSelectorProps {
   notes: string
   onNotesChange: (notes: string) => void
   productCategory?: ProductCategory
-  servicePricing?: any[] // Prix des services pour afficher les options disponibles
+  servicePricing?: ServicePricing[] // Prix des services pour afficher les options disponibles
   vectorization?: boolean // Vectorisation du logo
   onVectorizationChange?: (vectorization: boolean) => void // Callback pour la vectorisation
 }
@@ -46,15 +47,21 @@ export function TechniqueSelector({
   onVectorizationChange,
 }: TechniqueSelectorProps) {
   const t = useTranslations('technique')
+  const commonT = useTranslations('common')
   const [localOptions, setLocalOptions] = useState<TechniqueOptions | null>(options)
   const [customDimension, setCustomDimension] = useState('')
+  const [customPantoneCodes, setCustomPantoneCodes] = useState<Record<number, string>>({}) // Index -> code personnalisé
+  const isInternalUpdate = useRef(false) // Flag pour éviter les boucles lors des mises à jour internes
+  const lastSerigraphieNombreCouleurs = useRef<number | null>(null) // Dernière valeur de nombreCouleurs pour la sérigraphie
+  const lastBroderieNombreCouleurs = useRef<number | null>(null) // Dernière valeur de nombreCouleurs pour la broderie
 
   // Synchroniser localOptions avec options venant de l'extérieur
   useEffect(() => {
-    if (options && options !== localOptions) {
+    if (options && options !== localOptions && !isInternalUpdate.current) {
       setLocalOptions(options)
     }
-  }, [options])
+    isInternalUpdate.current = false
+  }, [options, localOptions])
 
   useEffect(() => {
     if (selectedTechnique && !localOptions) {
@@ -65,6 +72,7 @@ export function TechniqueSelector({
           nombreCouleurs: 1,
           nombreEmplacements: 1,
           selectedOptions: [],
+          pantoneColors: [],
         } as SerigraphieOptions)
       } else if (selectedTechnique === 'broderie') {
         setLocalOptions({
@@ -72,6 +80,8 @@ export function TechniqueSelector({
           nombreEmplacements: 1,
           embroiderySize: 'petite', // Par défaut : petite broderie
           isPersonalization: false,
+          nombreCouleurs: 1,
+          pantoneColors: [],
         } as BroderieOptions)
       } else if (selectedTechnique === 'dtf') {
         setLocalOptions({
@@ -133,11 +143,213 @@ export function TechniqueSelector({
     onFilesChange(files.filter(f => f.id !== fileId))
   }
 
+  const handlePersonalizationFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const filesList = event.target.files
+    if (!filesList || filesList.length === 0) return
+
+    const file = filesList[0]
+    const personalizationFile = {
+      id: Math.random().toString(36).substring(7),
+      name: file.name,
+      url: URL.createObjectURL(file),
+      size: file.size,
+      type: file.type,
+    }
+
+    if (selectedTechnique === 'broderie') {
+      updateOptions({ personalizationFile } as Partial<BroderieOptions>)
+    } else if (selectedTechnique === 'dtf') {
+      updateOptions({ personalizationFile } as Partial<DTFOptions>)
+    }
+  }
+
+  const removePersonalizationFile = () => {
+    if (selectedTechnique === 'broderie') {
+      const options = localOptions as BroderieOptions
+      if (options.personalizationFile) {
+        URL.revokeObjectURL(options.personalizationFile.url)
+      }
+      updateOptions({ personalizationFile: undefined } as Partial<BroderieOptions>)
+    } else if (selectedTechnique === 'dtf') {
+      const options = localOptions as DTFOptions
+      if (options.personalizationFile) {
+        URL.revokeObjectURL(options.personalizationFile.url)
+      }
+      updateOptions({ personalizationFile: undefined } as Partial<DTFOptions>)
+    }
+  }
+
+  // Gérer les couleurs Pantone pour la sérigraphie
+  const handlePantoneColorChange = (index: number, colorCode: string, isCustom: boolean = false) => {
+    if (!localOptions || selectedTechnique !== 'serigraphie') return
+    
+    const options = localOptions as SerigraphieOptions
+    const currentColors = options.pantoneColors || []
+    
+    // Créer ou mettre à jour la couleur à l'index spécifié
+    const newColors = [...currentColors]
+    if (isCustom) {
+      newColors[index] = {
+        code: `Custom-${Date.now()}-${index}`,
+        isCustom: true,
+        customCode: colorCode,
+      }
+      setCustomPantoneCodes({ ...customPantoneCodes, [index]: colorCode })
+    } else {
+      newColors[index] = {
+        code: colorCode,
+        isCustom: false,
+      }
+      // Supprimer le code personnalisé si on passe à une couleur de base
+      const newCustomCodes = { ...customPantoneCodes }
+      delete newCustomCodes[index]
+      setCustomPantoneCodes(newCustomCodes)
+    }
+    
+    // S'assurer qu'on a le bon nombre de couleurs
+    while (newColors.length < options.nombreCouleurs) {
+      newColors.push({
+        code: basePantoneColors[0],
+        isCustom: false,
+      })
+    }
+    newColors.splice(options.nombreCouleurs)
+    
+    updateOptions({ pantoneColors: newColors } as Partial<SerigraphieOptions>)
+  }
+
+  const handleCustomPantoneCodeChange = (index: number, customCode: string) => {
+    setCustomPantoneCodes({ ...customPantoneCodes, [index]: customCode })
+    if (customCode.trim()) {
+      handlePantoneColorChange(index, customCode, true)
+    }
+  }
+
+  // Gérer les couleurs Pantone pour la broderie (similaire à la sérigraphie)
+  const handleBroderiePantoneColorChange = (index: number, colorCode: string, isCustom: boolean = false) => {
+    if (!localOptions || selectedTechnique !== 'broderie') return
+    
+    const options = localOptions as BroderieOptions
+    const currentColors = options.pantoneColors || []
+    
+    // Créer ou mettre à jour la couleur à l'index spécifié
+    const newColors = [...currentColors]
+    if (isCustom) {
+      newColors[index] = {
+        code: `Custom-${Date.now()}-${index}`,
+        isCustom: true,
+        customCode: colorCode,
+      }
+      setCustomPantoneCodes({ ...customPantoneCodes, [index]: colorCode })
+    } else {
+      newColors[index] = {
+        code: colorCode,
+        isCustom: false,
+      }
+      // Supprimer le code personnalisé si on passe à une couleur de base
+      const newCustomCodes = { ...customPantoneCodes }
+      delete newCustomCodes[index]
+      setCustomPantoneCodes(newCustomCodes)
+    }
+    
+    // S'assurer qu'on a le bon nombre de couleurs (max 6)
+    const maxColors = 6
+    const nombreCouleurs = options.nombreCouleurs || 1
+    while (newColors.length < nombreCouleurs) {
+      newColors.push({
+        code: basePantoneColors[0],
+        isCustom: false,
+      })
+    }
+    newColors.splice(nombreCouleurs)
+    
+    updateOptions({ pantoneColors: newColors } as Partial<BroderieOptions>)
+  }
+
+  const handleBroderieCustomPantoneCodeChange = (index: number, customCode: string) => {
+    setCustomPantoneCodes({ ...customPantoneCodes, [index]: customCode })
+    if (customCode.trim()) {
+      handleBroderiePantoneColorChange(index, customCode, true)
+    }
+  }
+
+  // Extraire nombreCouleurs pour la sérigraphie de manière stable
+  const serigraphieNombreCouleurs = selectedTechnique === 'serigraphie' && localOptions 
+    ? (localOptions as SerigraphieOptions).nombreCouleurs || 1 
+    : null
+
+  // Extraire nombreCouleurs pour la broderie de manière stable
+  const broderieNombreCouleurs = selectedTechnique === 'broderie' && localOptions 
+    ? (localOptions as BroderieOptions).nombreCouleurs || 1 
+    : null
+
+  // Synchroniser le nombre de couleurs avec les couleurs Pantone (sérigraphie)
+  useEffect(() => {
+    if (selectedTechnique === 'serigraphie' && localOptions && serigraphieNombreCouleurs !== null) {
+      const options = localOptions as SerigraphieOptions
+      const currentColors = options.pantoneColors || []
+      
+      // Vérifier si nombreCouleurs a vraiment changé depuis la dernière fois
+      if (serigraphieNombreCouleurs !== lastSerigraphieNombreCouleurs.current && serigraphieNombreCouleurs !== currentColors.length) {
+        lastSerigraphieNombreCouleurs.current = serigraphieNombreCouleurs
+        const newColors = [...currentColors]
+        while (newColors.length < serigraphieNombreCouleurs) {
+          newColors.push({
+            code: basePantoneColors[0],
+            isCustom: false,
+          })
+        }
+        newColors.splice(serigraphieNombreCouleurs)
+        // Utiliser setLocalOptions directement avec le flag pour éviter les boucles
+        isInternalUpdate.current = true
+        setLocalOptions({
+          ...localOptions,
+          pantoneColors: newColors,
+        } as TechniqueOptions)
+      }
+    } else if (selectedTechnique !== 'serigraphie') {
+      lastSerigraphieNombreCouleurs.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTechnique, serigraphieNombreCouleurs])
+
+  // Synchroniser le nombre de couleurs avec les couleurs Pantone (broderie)
+  useEffect(() => {
+    if (selectedTechnique === 'broderie' && localOptions && broderieNombreCouleurs !== null) {
+      const options = localOptions as BroderieOptions
+      const currentColors = options.pantoneColors || []
+      
+      // Vérifier si nombreCouleurs a vraiment changé depuis la dernière fois
+      if (broderieNombreCouleurs !== lastBroderieNombreCouleurs.current && broderieNombreCouleurs !== currentColors.length) {
+        lastBroderieNombreCouleurs.current = broderieNombreCouleurs
+        const newColors = [...currentColors]
+        while (newColors.length < broderieNombreCouleurs) {
+          newColors.push({
+            code: basePantoneColors[0],
+            isCustom: false,
+          })
+        }
+        newColors.splice(broderieNombreCouleurs)
+        // Utiliser setLocalOptions directement avec le flag pour éviter les boucles
+        isInternalUpdate.current = true
+        setLocalOptions({
+          ...localOptions,
+          pantoneColors: newColors,
+        } as TechniqueOptions)
+      }
+    } else if (selectedTechnique !== 'broderie') {
+      lastBroderieNombreCouleurs.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTechnique, broderieNombreCouleurs])
+
   // Synchroniser localOptions avec onOptionsChange (sans positions pour éviter les boucles)
   useEffect(() => {
-    if (localOptions) {
+    if (localOptions && !isInternalUpdate.current) {
       onOptionsChange(localOptions)
     }
+    // Réinitialiser le flag après chaque render
+    isInternalUpdate.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localOptions])
 
@@ -155,6 +367,7 @@ export function TechniqueSelector({
 
   const updateOptions = (updates: Partial<TechniqueOptions>) => {
     if (localOptions) {
+      isInternalUpdate.current = true
       setLocalOptions({ ...localOptions, ...updates })
     }
   }
@@ -178,11 +391,22 @@ export function TechniqueSelector({
     }
   }
 
+  // Récupérer les dimensions disponibles depuis servicePricing pour DTF
+  const getAvailableDimensions = (): string[] => {
+    const dtfPricing = servicePricing.find((p: ServicePricing) => p.technique === 'dtf')
+    if (dtfPricing && 'dimensions' in dtfPricing && Array.isArray(dtfPricing.dimensions)) {
+      return dtfPricing.dimensions
+    }
+    // Fallback vers les dimensions par défaut si servicePricing n'est pas encore chargé
+    return ['5x5 cm', '10x10 cm', '15x15 cm', '20x20 cm', '25x25 cm', '10x15 cm', '15x20 cm', '20x30 cm', '30x40 cm', 'Personnalisé']
+  }
+
   const getDimensionDisplayValue = () => {
     if (!localOptions) return ''
     if (selectedTechnique === 'dtf') {
       const dim = (localOptions as DTFOptions).dimension
-      return availableDimensions.includes(dim) ? dim : 'Personnalisé'
+      const availableDims = getAvailableDimensions()
+      return availableDims.includes(dim) ? dim : 'Personnalisé'
     }
     return ''
   }
@@ -191,7 +415,8 @@ export function TechniqueSelector({
     if (!localOptions) return false
     if (selectedTechnique === 'dtf') {
       const dim = (localOptions as DTFOptions).dimension
-      return dim && !availableDimensions.includes(dim)
+      const availableDims = getAvailableDimensions()
+      return dim && !availableDims.includes(dim)
     }
     return false
   }
@@ -250,27 +475,129 @@ export function TechniqueSelector({
             </div>
 
             <div className="space-y-2">
-              <Label>
-                {t('colorCount')} ({t('minColors', { min: techniqueConfig.serigraphie.minCouleurs })}, {t('maxColors', { max: techniqueConfig.serigraphie.maxCouleurs })})
-              </Label>
-              <Input
-                type="number"
-                min={techniqueConfig.serigraphie.minCouleurs}
-                max={techniqueConfig.serigraphie.maxCouleurs}
-                value={(localOptions as SerigraphieOptions).nombreCouleurs}
-                onChange={(e) =>
-                  updateOptions({
-                    nombreCouleurs: parseInt(e.target.value) || 1,
-                  } as Partial<SerigraphieOptions>)
-                }
-                onWheel={(e) => e.currentTarget.blur()}
-              />
+              <Label>{t('colorCount')}</Label>
+              {(() => {
+                const serigraphiePricing = servicePricing.find((p: ServicePricing) => p.technique === 'serigraphie')
+                const availableColorCounts = serigraphiePricing && 'colorCounts' in serigraphiePricing && Array.isArray(serigraphiePricing.colorCounts)
+                  ? serigraphiePricing.colorCounts
+                  : [1, 2, 3, 4, 5, 6] // Fallback vers les valeurs par défaut
+                
+                return (
+                  <Select
+                    value={String((localOptions as SerigraphieOptions).nombreCouleurs)}
+                    onValueChange={(value) =>
+                      updateOptions({
+                        nombreCouleurs: parseInt(value) || 1,
+                      } as Partial<SerigraphieOptions>)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableColorCounts.map((count: number) => (
+                        <SelectItem key={count} value={String(count)}>
+                          {count} {count === 1 ? commonT('color') : commonT('colors')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
+              })()}
             </div>
+
+            {/* Sélection des couleurs Pantone */}
+            {(() => {
+              const options = localOptions as SerigraphieOptions
+              const pantoneColors = options.pantoneColors || []
+              const customColorsCount = pantoneColors.filter(c => c.isCustom).length
+              const surchargeAmount = customColorsCount * 25 // 25€ par couleur hors catalogue
+              
+              return (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label>{t('pantoneColors')}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t('pantoneColorsDescription')}
+                    </p>
+                    
+                    {Array.from({ length: options.nombreCouleurs }).map((_, index) => {
+                      const currentColor = pantoneColors[index] || { code: basePantoneColors[0], isCustom: false }
+                      const isCustom = currentColor.isCustom
+                      const customCode = customPantoneCodes[index] || currentColor.customCode || ''
+                      
+                      return (
+                        <div key={index} className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="text-sm font-medium">
+                              {commonT('color')} {index + 1}
+                            </Label>
+                            {isCustom && (
+                              <span className="text-xs text-orange-600 font-medium">
+                                +25€ {t('surcharge')}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Select
+                              value={isCustom ? 'custom' : currentColor.code}
+                              onValueChange={(value) => {
+                                if (value === 'custom') {
+                                  // Passer en mode personnalisé
+                                  handlePantoneColorChange(index, customCode || '', true)
+                                } else {
+                                  // Sélectionner une couleur de base
+                                  handlePantoneColorChange(index, value, false)
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {basePantoneColors.map((color) => (
+                                  <SelectItem key={color} value={color}>
+                                    {color}
+                                  </SelectItem>
+                                ))}
+                                <SelectItem value="custom">
+                                  {t('customPantone')} (+25€)
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            
+                            {isCustom && (
+                              <Input
+                                placeholder={t('enterPantoneCode')}
+                                value={customCode}
+                                onChange={(e) => handleCustomPantoneCodeChange(index, e.target.value)}
+                                className="mt-2"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    
+                    {customColorsCount > 0 && (
+                      <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <p className="text-sm text-orange-800">
+                          <strong>{t('customColorsSurcharge')}:</strong> {customColorsCount} {customColorsCount === 1 ? t('customColor') : t('customColors')} × 25€ = <strong>{surchargeAmount}€</strong>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Options de sérigraphie (Discharge, Gold, etc.) */}
             {(() => {
-              const serigraphiePricing = servicePricing.find((p: any) => p.technique === 'serigraphie')
-              const availableOptions = serigraphiePricing?.options || []
+              const serigraphiePricing = servicePricing.find((p: ServicePricing) => p.technique === 'serigraphie')
+              const availableOptions = serigraphiePricing && 'options' in serigraphiePricing && serigraphiePricing.options
+                ? serigraphiePricing.options
+                : []
               
               if (availableOptions.length > 0) {
                 const currentOptions = (localOptions as SerigraphieOptions).selectedOptions || []
@@ -341,23 +668,65 @@ export function TechniqueSelector({
             </div>
 
             <div className="space-y-2">
-              <Label>
-                {t('points')} ({t('minPoints', { min: techniqueConfig.broderie.minPoints.toLocaleString() })}, {t('maxPoints', { max: techniqueConfig.broderie.maxPoints.toLocaleString() })})
-              </Label>
-              <Input
-                type="number"
-                min={techniqueConfig.broderie.minPoints}
-                max={techniqueConfig.broderie.maxPoints}
-                value={(localOptions as BroderieOptions).nombrePoints}
-                onChange={(e) =>
-                  updateOptions({
-                    nombrePoints: parseInt(e.target.value) || 1000,
-                  } as Partial<BroderieOptions>)
+              <Label>{t('points')}</Label>
+              {(() => {
+                const options = localOptions as BroderieOptions
+                const embroiderySize = options.embroiderySize || 'petite'
+                const broderiePricing = servicePricing.find((p: ServicePricing) => p.technique === 'broderie')
+                
+                // Récupérer les pointRanges selon la taille de broderie
+                let pointRanges: Array<{ min: number; max: number | null; label: string }> = []
+                if (broderiePricing && 'pointRangesPetite' in broderiePricing && 'pointRangesGrande' in broderiePricing) {
+                  pointRanges = embroiderySize === 'petite' 
+                    ? broderiePricing.pointRangesPetite 
+                    : broderiePricing.pointRangesGrande
                 }
-                onWheel={(e) => e.currentTarget.blur()}
-              />
+                
+                // Si pas de pointRanges depuis l'admin, utiliser des valeurs par défaut
+                if (pointRanges.length === 0) {
+                  pointRanges = [
+                    { min: 0, max: 5000, label: '0-5000' },
+                    { min: 5001, max: 10000, label: '5001-10000' },
+                    { min: 10001, max: 20000, label: '10001-20000' },
+                    { min: 20001, max: 30000, label: '20001-30000' },
+                    { min: 30001, max: null, label: '30001+' },
+                  ]
+                }
+                
+                // Trouver la fourchette correspondant au nombre de points actuel
+                const currentPoints = options.nombrePoints || 5000
+                const currentRange = pointRanges.find(range => 
+                  currentPoints >= range.min && (range.max === null || currentPoints <= range.max)
+                ) || pointRanges[0]
+                
+                return (
+                  <Select
+                    value={currentRange.label}
+                    onValueChange={(value) => {
+                      const selectedRange = pointRanges.find(r => r.label === value)
+                      if (selectedRange) {
+                        // Utiliser le min de la fourchette comme valeur
+                        updateOptions({
+                          nombrePoints: selectedRange.min,
+                        } as Partial<BroderieOptions>)
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pointRanges.map((range) => (
+                        <SelectItem key={range.label} value={range.label}>
+                          {range.label} {t('points')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
+              })()}
               <p className="text-xs text-muted-foreground">
-                Le nombre de points détermine la complexité de la broderie
+                {t('pointsDescription')}
               </p>
             </div>
 
@@ -368,6 +737,7 @@ export function TechniqueSelector({
                 onCheckedChange={(checked) =>
                   updateOptions({
                     isPersonalization: checked === true,
+                    ...(checked === false && { personalizationFile: undefined, typography: undefined }),
                   } as Partial<BroderieOptions>)
                 }
               />
@@ -378,6 +748,181 @@ export function TechniqueSelector({
                 {t('personalization')}
               </Label>
             </div>
+
+            {/* Options de personnalisation pour la broderie */}
+            {(localOptions as BroderieOptions).isPersonalization && (
+              <div className="space-y-4 pt-4 border-t bg-muted/50 p-4 rounded-lg">
+                <div className="space-y-2">
+                  <Label>{t('personalizationFile')}</Label>
+                  {(localOptions as BroderieOptions).personalizationFile ? (
+                    <div className="flex items-center justify-between p-3 bg-background border rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <Upload className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{(localOptions as BroderieOptions).personalizationFile?.name}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={removePersonalizationFile}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="file"
+                        accept=".pdf,.ai,.eps,.svg,.png,.jpg,.jpeg"
+                        onChange={handlePersonalizationFileUpload}
+                        className="flex-1"
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {t('personalizationFileDescription')}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t('typography')}</Label>
+                  <Select
+                    value={(localOptions as BroderieOptions).typography || ''}
+                    onValueChange={(value) =>
+                      updateOptions({
+                        typography: value,
+                      } as Partial<BroderieOptions>)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('selectTypography')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {embroideryTypographies.map((typography) => (
+                        <SelectItem key={typography} value={typography}>
+                          {typography}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t('typographyDescription')}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Sélection du nombre de couleurs Pantone pour la broderie */}
+            <div className="space-y-2 pt-4 border-t">
+              <Label>{t('colorCount')} (max 6)</Label>
+              <Select
+                value={String((localOptions as BroderieOptions).nombreCouleurs || 1)}
+                onValueChange={(value) => {
+                  const nombreCouleurs = Math.min(parseInt(value) || 1, 6) // Max 6
+                  updateOptions({
+                    nombreCouleurs,
+                  } as Partial<BroderieOptions>)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 6].map((count) => (
+                    <SelectItem key={count} value={String(count)}>
+                      {count} {count === 1 ? commonT('color') : commonT('colors')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sélection des couleurs Pantone pour la broderie */}
+            {(() => {
+              const options = localOptions as BroderieOptions
+              const pantoneColors = options.pantoneColors || []
+              const nombreCouleurs = options.nombreCouleurs || 1
+              const customColorsCount = pantoneColors.filter(c => c.isCustom).length
+              const surchargeAmount = customColorsCount * 25 // 25€ par couleur hors catalogue
+              
+              return (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label>{t('pantoneColors')}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t('pantoneColorsDescription')}
+                    </p>
+                    
+                    {Array.from({ length: nombreCouleurs }).map((_, index) => {
+                      const currentColor = pantoneColors[index] || { code: basePantoneColors[0], isCustom: false }
+                      const isCustom = currentColor.isCustom
+                      const customCode = customPantoneCodes[index] || currentColor.customCode || ''
+                      
+                      return (
+                        <div key={index} className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="text-sm font-medium">
+                              {commonT('color')} {index + 1}
+                            </Label>
+                            {isCustom && (
+                              <span className="text-xs text-orange-600 font-medium">
+                                +25€ {t('surcharge')}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Select
+                              value={isCustom ? 'custom' : currentColor.code}
+                              onValueChange={(value) => {
+                                if (value === 'custom') {
+                                  // Passer en mode personnalisé
+                                  handleBroderiePantoneColorChange(index, customCode || '', true)
+                                } else {
+                                  // Sélectionner une couleur de base
+                                  handleBroderiePantoneColorChange(index, value, false)
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {basePantoneColors.map((color) => (
+                                  <SelectItem key={color} value={color}>
+                                    {color}
+                                  </SelectItem>
+                                ))}
+                                <SelectItem value="custom">
+                                  {t('customPantone')} (+25€)
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            
+                            {isCustom && (
+                              <Input
+                                placeholder={t('enterPantoneCode')}
+                                value={customCode}
+                                onChange={(e) => handleBroderieCustomPantoneCodeChange(index, e.target.value)}
+                                className="mt-2"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    
+                    {customColorsCount > 0 && (
+                      <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <p className="text-sm text-orange-800">
+                          <strong>{t('customColorsSurcharge')}:</strong> {customColorsCount} {customColorsCount === 1 ? t('customColor') : t('customColors')} × 25€ = <strong>{surchargeAmount}€</strong>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -394,7 +939,7 @@ export function TechniqueSelector({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableDimensions.map(dim => (
+                  {getAvailableDimensions().map(dim => (
                     <SelectItem key={dim} value={dim}>
                       {dim}
                     </SelectItem>
@@ -418,6 +963,7 @@ export function TechniqueSelector({
                 onCheckedChange={(checked) =>
                   updateOptions({
                     isPersonalization: checked === true,
+                    ...(checked === false && { personalizationFile: undefined, typography: undefined }),
                   } as Partial<DTFOptions>)
                 }
               />
@@ -428,6 +974,69 @@ export function TechniqueSelector({
                 {t('personalization')}
               </Label>
             </div>
+
+            {/* Options de personnalisation pour la DTF */}
+            {(localOptions as DTFOptions).isPersonalization && (
+              <div className="space-y-4 pt-4 border-t bg-muted/50 p-4 rounded-lg">
+                <div className="space-y-2">
+                  <Label>{t('personalizationFile')}</Label>
+                  {(localOptions as DTFOptions).personalizationFile ? (
+                    <div className="flex items-center justify-between p-3 bg-background border rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <Upload className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{(localOptions as DTFOptions).personalizationFile?.name}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={removePersonalizationFile}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="file"
+                        accept=".pdf,.ai,.eps,.svg,.png,.jpg,.jpeg"
+                        onChange={handlePersonalizationFileUpload}
+                        className="flex-1"
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {t('personalizationFileDescription')}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t('typography')}</Label>
+                  <Select
+                    value={(localOptions as DTFOptions).typography || ''}
+                    onValueChange={(value) =>
+                      updateOptions({
+                        typography: value,
+                      } as Partial<DTFOptions>)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('selectTypography')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {dtfTypographies.map((typography) => (
+                        <SelectItem key={typography} value={typography}>
+                          {typography}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t('typographyDescription')}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -1153,7 +1153,7 @@ export function ProductSelector({ selectedProducts, onProductsChange }: ProductS
                           </span>
                         ))}
                         <p className="mt-1 font-medium">
-                          {t('quote.totalPieces', { count: getTotalQuantity(selectedProduct.colorQuantities) })}
+                          {t('totalPieces', { count: getTotalQuantity(selectedProduct.colorQuantities) })}
                         </p>
                       </div>
                     )}

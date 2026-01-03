@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       clientCompany: clientInfo?.company || client.company,
       clientPhone: clientInfo?.phone || client.phone,
       deliveryType: safeDelivery.type || 'pickup',
+      deliveryMethod: safeDelivery.method || null, // 'pickup' | 'transporteur' | 'coursier' (uniquement si type = 'livraison')
       deliveryAddress: toPrismaJson(safeDelivery.address),
       billingAddressDifferent: safeDelivery.billingAddressDifferent || false,
       billingAddress: toPrismaJson(safeDelivery.billingAddress),

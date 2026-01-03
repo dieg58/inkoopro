@@ -30,11 +30,18 @@ export interface Technique {
 // Options spécifiques par technique
 export type TextileType = 'clair' | 'fonce'
 
+export interface PantoneColor {
+  code: string // Code Pantone (ex: "186 C" ou "Custom-12345")
+  isCustom: boolean // true si c'est une couleur hors catalogue
+  customCode?: string // Code personnalisé si isCustom = true
+}
+
 export interface SerigraphieOptions {
   textileType: TextileType // Impression sur textile clair ou foncé
   nombreCouleurs: number
   nombreEmplacements: number
   selectedOptions?: string[] // Options sélectionnées (ex: ['discharge', 'gold'])
+  pantoneColors?: PantoneColor[] // Couleurs Pantone sélectionnées
 }
 
 export interface BroderieOptions {
@@ -42,12 +49,18 @@ export interface BroderieOptions {
   nombreEmplacements: number
   embroiderySize: 'petite' | 'grande' // Petite (max 10x10cm) ou Grande (max 20x25cm)
   isPersonalization?: boolean // Personnalisation (totem, prénom, etc.)
+  personalizationFile?: { id: string; name: string; url: string; size: number; type: string } // Fichier pour la personnalisation
+  typography?: string // Typographie choisie pour la personnalisation
+  nombreCouleurs?: number // Nombre de couleurs Pantone (max 6)
+  pantoneColors?: PantoneColor[] // Couleurs Pantone sélectionnées
 }
 
 export interface DTFOptions {
   dimension: string // Dimension du marquage
   nombreEmplacements: number
   isPersonalization?: boolean // Personnalisation (totem, prénom, etc.)
+  personalizationFile?: { id: string; name: string; url: string; size: number; type: string } // Fichier pour la personnalisation
+  typography?: string // Typographie choisie pour la personnalisation
 }
 
 export type TechniqueOptions = SerigraphieOptions | BroderieOptions | DTFOptions

@@ -163,6 +163,104 @@ export const techniqueConfig: TechniqueConfig = {
   },
 }
 
+// Typographies disponibles pour la personnalisation
+export const embroideryTypographies = [
+  'Arial',
+  'Helvetica',
+  'Times New Roman',
+  'Courier New',
+  'Georgia',
+  'Verdana',
+  'Comic Sans MS',
+  'Impact',
+  'Trebuchet MS',
+  'Palatino',
+  'Garamond',
+  'Bookman',
+  'Baskerville',
+  'Futura',
+  'Bodoni',
+]
+
+export const dtfTypographies = [
+  'Arial',
+  'Helvetica',
+  'Times New Roman',
+  'Courier New',
+  'Georgia',
+  'Verdana',
+  'Comic Sans MS',
+  'Impact',
+  'Trebuchet MS',
+  'Palatino',
+  'Garamond',
+  'Bookman',
+  'Baskerville',
+  'Futura',
+  'Bodoni',
+  'Roboto',
+  'Open Sans',
+  'Lato',
+  'Montserrat',
+  'Raleway',
+]
+
+// Liste des 52 couleurs Pantone de base disponibles sans surcoût pour la sérigraphie
+export const basePantoneColors = [
+  'Pantone Black C',
+  'Pantone White',
+  'Pantone 186 C', // Rouge
+  'Pantone 286 C', // Bleu
+  'Pantone 354 C', // Vert
+  'Pantone Yellow C',
+  'Pantone Orange 021 C',
+  'Pantone Purple C',
+  'Pantone 285 C', // Bleu foncé
+  'Pantone 199 C', // Rose
+  'Pantone 300 C', // Bleu clair
+  'Pantone 361 C', // Vert clair
+  'Pantone 485 C', // Rouge foncé
+  'Pantone 032 C', // Rouge vif
+  'Pantone 072 C', // Bleu royal
+  'Pantone 347 C', // Vert émeraude
+  'Pantone 1235 C', // Jaune doré
+  'Pantone 1375 C', // Orange vif
+  'Pantone 2727 C', // Bleu ciel
+  'Pantone 375 C', // Vert lime
+  'Pantone 877 C', // Argent
+  'Pantone 871 C', // Or
+  'Pantone 1795 C', // Rouge corail
+  'Pantone 2935 C', // Bleu marine
+  'Pantone 348 C', // Vert forêt
+  'Pantone 116 C', // Jaune citron
+  'Pantone 1655 C', // Orange brûlé
+  'Pantone 2735 C', // Bleu électrique
+  'Pantone 356 C', // Vert menthe
+  'Pantone 200 C', // Rouge bordeaux
+  'Pantone 2995 C', // Bleu turquoise
+  'Pantone 382 C', // Vert jaune
+  'Pantone 1805 C', // Rouge cerise
+  'Pantone 3015 C', // Bleu acier
+  'Pantone 3265 C', // Vert océan
+  'Pantone 130 C', // Jaune moutarde
+  'Pantone 1585 C', // Orange pêche
+  'Pantone 281 C', // Bleu nuit
+  'Pantone 3405 C', // Vert jade
+  'Pantone 201 C', // Rouge sang
+  'Pantone 3125 C', // Bleu cyan
+  'Pantone 368 C', // Vert pomme
+  'Pantone 124 C', // Jaune or
+  'Pantone 1665 C', // Orange feu
+  'Pantone 2765 C', // Bleu indigo
+  'Pantone 350 C', // Vert sapin
+  'Pantone 188 C', // Rouge foncé
+  'Pantone 306 C', // Bleu azur
+  'Pantone 364 C', // Vert printemps
+  'Pantone 109 C', // Jaune soleil
+  'Pantone 1595 C', // Orange terracotta
+  'Pantone 280 C', // Bleu marine foncé
+]
+
 // Options de délai
 // Délai standard : 10 jours ouvrables par défaut
 // Options de 10 à 1 jour ouvrable
