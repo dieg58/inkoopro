@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { syncProductsFromOdoo } from '@/lib/products-db'
 
-// Vercel gratuit = 10 secondes max, donc on synchronise par petits lots
-export const maxDuration = 10 // 10 secondes maximum (limite Vercel gratuit)
+// Vercel Pro = 60 secondes max, on peut synchroniser plus de produits en une seule fois
+export const maxDuration = 60 // 60 secondes maximum (Vercel Pro)
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     const forceRefresh = body.forceRefresh === true
     const limit = body.limit ? parseInt(body.limit) : undefined
     const offset = body.offset ? parseInt(body.offset) : 0 // Offset pour la synchronisation progressive
-    const batchSize = body.batchSize ? parseInt(body.batchSize) : 200 // Taille du lot par défaut
+    const batchSize = body.batchSize ? parseInt(body.batchSize) : 1000 // Taille du lot par défaut (augmentée avec Vercel Pro)
     
     console.log('🔄 Synchronisation des produits demandée...', { 
       forceRefresh, 

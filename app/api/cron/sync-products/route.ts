@@ -17,12 +17,12 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔄 Synchronisation automatique des produits (Cron Job)...')
     
-    // Synchroniser par petits lots pour éviter le timeout
-    const BATCH_SIZE = 200
+    // Avec Vercel Pro (60s), on peut synchroniser plus de produits en une seule fois
+    const BATCH_SIZE = 1000 // Taille de lot augmentée
     let offset = 0
     let totalSynced = 0
     let hasMore = true
-    const maxIterations = 10 // Limiter à 10 itérations max (2000 produits) pour éviter le timeout
+    const maxIterations = 20 // Limiter à 20 itérations max (20000 produits) pour éviter le timeout
     
     for (let i = 0; i < maxIterations && hasMore; i++) {
       const result = await syncProductsFromOdoo(true, BATCH_SIZE, offset)

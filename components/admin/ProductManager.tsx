@@ -58,7 +58,7 @@ export function ProductManager() {
       let offset = 0
       let totalSynced = 0
       let hasMore = true
-      const batchSize = 200 // Synchroniser 200 produits à la fois (compatible Vercel gratuit)
+      const batchSize = 1000 // Synchroniser 1000 produits à la fois (Vercel Pro = 60s timeout)
       
       // Synchroniser progressivement par lots jusqu'à ce que tout soit fait
       while (hasMore) {

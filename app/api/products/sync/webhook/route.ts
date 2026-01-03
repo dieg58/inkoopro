@@ -3,7 +3,8 @@ import { syncProductsFromOdoo } from '@/lib/products-db'
 
 // Route webhook pour Odoo - synchronisation déclenchée par Odoo
 export const dynamic = 'force-dynamic'
-export const maxDuration = 10
+// Vercel Pro = 60 secondes max
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,8 +25,8 @@ export async function POST(request: NextRequest) {
     })
     
     // Si des IDs spécifiques sont fournis, on pourrait synchroniser uniquement ceux-là
-    // Pour l'instant, on synchronise un petit lot pour éviter le timeout
-    const BATCH_SIZE = 200
+    // Avec Vercel Pro (60s), on peut synchroniser plus de produits
+    const BATCH_SIZE = 1000
     const result = await syncProductsFromOdoo(true, BATCH_SIZE, 0)
     
     if (result.success) {

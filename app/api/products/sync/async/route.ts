@@ -3,7 +3,8 @@ import { syncProductsFromOdoo } from '@/lib/products-db'
 
 // Route pour synchronisation asynchrone - retourne immédiatement et continue en arrière-plan
 export const dynamic = 'force-dynamic'
-export const maxDuration = 10
+// Vercel Pro = 60 secondes max
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,8 +21,7 @@ export async function POST(request: NextRequest) {
     })
     
     // Démarrer la synchronisation en arrière-plan (ne pas attendre)
-    // Note: Sur Vercel gratuit, cela ne fonctionnera que pendant la durée de vie de la requête
-    // Mais c'est mieux que rien
+    // Note: Avec Vercel Pro (60s), on a plus de temps pour la synchronisation
     syncProductsFromOdoo(forceRefresh).catch(error => {
       console.error('Erreur synchronisation asynchrone:', error)
     })
