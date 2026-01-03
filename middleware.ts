@@ -34,6 +34,9 @@ export function middleware(request: NextRequest) {
       '/api/auth/login', 
       '/api/auth/logout', 
       '/api/auth/me', 
+      '/api/auth/forgot-password', // Réinitialisation de mot de passe
+      '/api/auth/reset-password', // Réinitialisation de mot de passe (avec token)
+      '/api/auth/validate-reset-token', // Validation du token de réinitialisation
       '/api/service-pricing', 
       '/api/pricing-config',
       '/api/admin/login', // Route de connexion admin doit être publique
@@ -78,7 +81,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Routes publiques (pas de protection) - retourner la réponse de next-intl
-  const publicRoutes = ['/login', '/register', '/admin/login']
+  const publicRoutes = ['/login', '/register', '/admin/login', '/forgot-password', '/reset-password']
   // La page d'accueil (/) est publique
   if (pathnameWithoutLocale === '/' || publicRoutes.some(route => pathnameWithoutLocale.startsWith(route))) {
     return response
