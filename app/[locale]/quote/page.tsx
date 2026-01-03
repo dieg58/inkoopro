@@ -701,21 +701,26 @@ export default function QuotePage() {
           </div>
         </div>
 
-        {/* Progress Indicator */}
+        {/* Progress Indicator - Cliquable pour navigation rapide */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center flex-1">
                 <div className="flex flex-col items-center flex-1">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+                  <button
+                    onClick={() => {
+                      setCurrentStep(step.id as CurrentStep)
+                      document.getElementById(`step-${step.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all cursor-pointer hover:scale-110 ${
                       index <= currentStepIndex
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     }`}
+                    title={`Aller à l'étape ${step.label}: ${step.title}`}
                   >
                     {step.label}
-                  </div>
+                  </button>
                   <span className="mt-2 text-sm text-center">{step.title}</span>
                 </div>
                 {index < steps.length - 1 && (
@@ -730,185 +735,232 @@ export default function QuotePage() {
           </div>
         </div>
 
-        {/* Main Content */}
+        {/* Main Content - Toutes les sections sur une seule page */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {currentStep === 'title' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>1. {t('stepTitle')}</CardTitle>
-                  <CardDescription>{t('stepTitleDescription')}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">{t('quoteTitle')}</Label>
-                    <Input
-                      id="title"
-                      value={quoteTitle}
-                      onChange={(e) => setQuoteTitle(e.target.value)}
-                      placeholder={t('quoteTitlePlaceholder')}
-                    />
-                  </div>
-                  <Button onClick={() => setCurrentStep('products')} className="w-full">
-                    {t('continue')}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {currentStep === 'products' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>2. {t('stepProducts')}</CardTitle>
-                  <CardDescription>{t('stepProductsDescription')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ProductSelector
-                    selectedProducts={selectedProducts}
-                    onProductsChange={setSelectedProducts}
+            {/* Section 1: Titre */}
+            <Card id="step-title" className={`scroll-mt-20 ${currentStep === 'title' ? 'ring-2 ring-primary' : ''}`}>
+              <CardHeader>
+                <CardTitle>1. {t('stepTitle')}</CardTitle>
+                <CardDescription>{t('stepTitleDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">{t('quoteTitle')}</Label>
+                  <Input
+                    id="title"
+                    value={quoteTitle}
+                    onChange={(e) => setQuoteTitle(e.target.value)}
+                    placeholder={t('quoteTitlePlaceholder')}
                   />
-                  <div className="flex gap-2 mt-4">
-                    <Button variant="outline" onClick={() => setCurrentStep('title')}>
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      {t('back')}
-                    </Button>
-                    <Button
-                      onClick={() => setCurrentStep('customization')}
-                      disabled={selectedProducts.length === 0}
-                      className="flex-1"
-                    >
-                      {t('continue')}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                </div>
+                <Button 
+                  onClick={() => {
+                    setCurrentStep('products')
+                    document.getElementById('step-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }} 
+                  className="w-full"
+                >
+                  {t('continue')} → 2. {t('stepProducts')}
+                </Button>
+              </CardContent>
+            </Card>
 
-            {currentStep === 'customization' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>3. {t('stepCustomization')}</CardTitle>
-                  <CardDescription>{t('stepCustomizationDescription')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CustomizationManager
-                    key={`customization-${currentStep}`}
-                    selectedProducts={selectedProducts}
-                    initialMarkings={currentMarkings}
-                    onComplete={(markings) => {
-                      setCurrentMarkings(markings)
-                      setCurrentStep('delivery')
+            {/* Section 2: Produits */}
+            <Card id="step-products" className={`scroll-mt-20 ${currentStep === 'products' ? 'ring-2 ring-primary' : ''}`}>
+              <CardHeader>
+                <CardTitle>2. {t('stepProducts')}</CardTitle>
+                <CardDescription>{t('stepProductsDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ProductSelector
+                  selectedProducts={selectedProducts}
+                  onProductsChange={setSelectedProducts}
+                />
+                <div className="flex gap-2 mt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setCurrentStep('title')
+                      document.getElementById('step-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }}
-                    onMarkingsChange={setCurrentMarkings}
-                  />
-                  <div className="flex gap-2 mt-4">
-                    <Button variant="outline" onClick={() => setCurrentStep('products')}>
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      {t('back')}
-                    </Button>
-                    <Button 
-                      onClick={() => {
-                        if (currentMarkings.length > 0) {
-                          setCurrentStep('delivery')
-                        }
-                      }}
-                      disabled={currentMarkings.length === 0}
-                      className="flex-1"
-                    >
-                      {t('continue')}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    ← 1. {t('stepTitle')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setCurrentStep('customization')
+                      document.getElementById('step-customization')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                    disabled={selectedProducts.length === 0}
+                    className="flex-1"
+                  >
+                    {t('continue')} → 3. {t('stepCustomization')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-            {currentStep === 'delivery' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>4. Livraison</CardTitle>
-                  <CardDescription>Configurez la méthode de livraison</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <DeliverySelector
-                    delivery={delivery}
-                    onDeliveryChange={setDelivery}
-                  />
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setCurrentStep('customization')}>
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      {t('back')}
-                    </Button>
-                    <Button onClick={() => setCurrentStep('options')} className="flex-1">
-                      {t('continue')}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Section 3: Personnalisation */}
+            <Card id="step-customization" className={`scroll-mt-20 ${currentStep === 'customization' ? 'ring-2 ring-primary' : ''}`}>
+              <CardHeader>
+                <CardTitle>3. {t('stepCustomization')}</CardTitle>
+                <CardDescription>{t('stepCustomizationDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CustomizationManager
+                  key={`customization-${currentStep}`}
+                  selectedProducts={selectedProducts}
+                  initialMarkings={currentMarkings}
+                  onComplete={(markings) => {
+                    setCurrentMarkings(markings)
+                    setCurrentStep('delivery')
+                    document.getElementById('step-delivery')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                  onMarkingsChange={setCurrentMarkings}
+                />
+                <div className="flex gap-2 mt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setCurrentStep('products')
+                      document.getElementById('step-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    ← 2. {t('stepProducts')}
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      if (currentMarkings.length > 0) {
+                        setCurrentStep('delivery')
+                        document.getElementById('step-delivery')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }
+                    }}
+                    disabled={currentMarkings.length === 0}
+                    className="flex-1"
+                  >
+                    {t('continue')} → 4. Livraison
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-            {currentStep === 'options' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>5. Options</CardTitle>
-                  <CardDescription>Configurez les options de délai et d'emballage</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <OptionsSelector
-                    delivery={delivery}
-                    onDeliveryChange={setDelivery}
-                    delay={delay}
-                    onDelayChange={setDelay}
-                  />
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setCurrentStep('delivery')}>
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      {t('back')}
-                    </Button>
-                    <Button onClick={() => setCurrentStep('review')} className="flex-1">
-                      {t('continue')}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Section 4: Livraison */}
+            <Card id="step-delivery" className={`scroll-mt-20 ${currentStep === 'delivery' ? 'ring-2 ring-primary' : ''}`}>
+              <CardHeader>
+                <CardTitle>4. Livraison</CardTitle>
+                <CardDescription>Configurez la méthode de livraison</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <DeliverySelector
+                  delivery={delivery}
+                  onDeliveryChange={setDelivery}
+                />
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setCurrentStep('customization')
+                      document.getElementById('step-customization')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    ← 3. {t('stepCustomization')}
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setCurrentStep('options')
+                      document.getElementById('step-options')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }} 
+                    className="flex-1"
+                  >
+                    {t('continue')} → 5. Options
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-            {currentStep === 'review' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>6. {t('stepReview')}</CardTitle>
-                  <CardDescription>{t('stepReviewDescription')}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setCurrentStep('options')}>
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      {t('back')}
-                    </Button>
-                    <Button onClick={handleSaveDraft} variant="outline" className="flex-1">
-                      <Save className="h-4 w-4 mr-2" />
-                      {t('saveDraft')}
-                    </Button>
-                    <Button onClick={handleDownloadPDF} variant="outline" className="flex-1">
-                      <Download className="h-4 w-4 mr-2" />
-                      {t('downloadPDF')}
-                    </Button>
-                    <Button onClick={handleValidate} disabled={isSubmitting} className="flex-1">
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          {t('submitting')}
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-4 w-4 mr-2" />
-                          {t('validate')}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Section 5: Options */}
+            <Card id="step-options" className={`scroll-mt-20 ${currentStep === 'options' ? 'ring-2 ring-primary' : ''}`}>
+              <CardHeader>
+                <CardTitle>5. Options</CardTitle>
+                <CardDescription>Configurez les options de délai et d'emballage</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <OptionsSelector
+                  delivery={delivery}
+                  onDeliveryChange={setDelivery}
+                  delay={delay}
+                  onDelayChange={setDelay}
+                />
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setCurrentStep('delivery')
+                      document.getElementById('step-delivery')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    ← 4. Livraison
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setCurrentStep('review')
+                      document.getElementById('step-review')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }} 
+                    className="flex-1"
+                  >
+                    {t('continue')} → 6. {t('stepReview')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Section 6: Récapitulatif */}
+            <Card id="step-review" className={`scroll-mt-20 ${currentStep === 'review' ? 'ring-2 ring-primary' : ''}`}>
+              <CardHeader>
+                <CardTitle>6. {t('stepReview')}</CardTitle>
+                <CardDescription>{t('stepReviewDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setCurrentStep('options')
+                      document.getElementById('step-options')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    ← 5. Options
+                  </Button>
+                  <Button onClick={handleSaveDraft} variant="outline" className="flex-1">
+                    <Save className="h-4 w-4 mr-2" />
+                    {t('saveDraft')}
+                  </Button>
+                  <Button onClick={handleDownloadPDF} variant="outline" className="flex-1">
+                    <Download className="h-4 w-4 mr-2" />
+                    {t('downloadPDF')}
+                  </Button>
+                  <Button onClick={handleValidate} disabled={isSubmitting} className="flex-1">
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {t('submitting')}
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        {t('validate')}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Sidebar */}
