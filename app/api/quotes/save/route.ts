@@ -57,16 +57,26 @@ export async function POST(request: NextRequest) {
 
     // Trouver ou créer le devis en cours
     let existingQuote = null
-    if (quoteId) {
+    // Vérifier que quoteId est une chaîne non vide et valide
+    if (quoteId && typeof quoteId === 'string' && quoteId.trim() !== '') {
       // Si un ID est fourni (et n'est pas null explicitement), chercher ce devis spécifique
+      console.log(`🔍 Recherche du devis existant avec ID: ${quoteId}`)
       existingQuote = await prisma.quote.findFirst({
-      where: {
+        where: {
           id: quoteId,
           clientId: dbClient.id, // Vérifier que le devis appartient au client
         },
       })
+      
+      if (existingQuote) {
+        console.log(`✅ Devis trouvé: ${existingQuote.id} - Titre: "${existingQuote.title}"`)
+      } else {
+        console.warn(`⚠️  Devis avec ID ${quoteId} non trouvé ou n'appartient pas au client ${dbClient.id}`)
+      }
+    } else {
+      console.log(`🆕 Aucun ID de devis fourni (quoteId: ${quoteId}), création d'un nouveau devis`)
     }
-    // Si quoteId est null explicitement ou undefined, créer un nouveau devis (pas de recherche du draft le plus récent)
+    // Si quoteId est null explicitement, undefined, ou chaîne vide, créer un nouveau devis
 
     // Validation des données avec valeurs par défaut
     const safeDelay = delay || { type: 'standard', workingDays: 10 }

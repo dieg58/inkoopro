@@ -230,8 +230,11 @@ export default function OrdersPage() {
                               const data = await response.json()
                               if (data.success && data.quote) {
                                 // Sauvegarder le devis dans localStorage pour le charger
+                                // IMPORTANT: Utiliser data.quote.id et non quote.id (qui n'existe pas dans ce contexte)
+                                const quoteId = data.quote.id
+                                console.log(`📋 Préparation du chargement du devis avec ID: ${quoteId}`)
                                 localStorage.setItem('inkoo_pro_quote_to_load', JSON.stringify({
-                                  quoteId: quote.id,
+                                  quoteId: quoteId,
                                   quote: data.quote,
                                 }))
                                 router.push(`/${locale}/quote`)

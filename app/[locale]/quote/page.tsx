@@ -78,11 +78,24 @@ export default function QuotePage() {
         step: currentStep
       })
       
+      // S'assurer que quoteId est une chaîne valide ou null (pas undefined)
+      const quoteIdToSend = currentQuoteId && typeof currentQuoteId === 'string' && currentQuoteId.trim() !== '' 
+        ? currentQuoteId 
+        : null
+      
+      console.log('📤 Envoi de la sauvegarde du devis:', {
+        quoteId: quoteIdToSend,
+        title: quoteTitle,
+        productsCount: selectedProducts.length,
+        markingsCount: currentMarkings.length,
+        step: currentStep
+      })
+      
       const response = await fetch('/api/quotes/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          quoteId: currentQuoteId, // Envoyer l'ID si on en a un
+          quoteId: quoteIdToSend, // Envoyer l'ID si on en a un (null sinon)
           title: quoteTitle,
           selectedProducts,
           quoteItems,
@@ -177,7 +190,14 @@ export default function QuotePage() {
                 phone: clientInfoData.phone || quote.clientPhone || '',
               })
               // Stocker l'ID du devis pour les futures sauvegardes
-              setCurrentQuoteId(loadData.quoteId || quote.id || null)
+              const quoteIdToSet = loadData.quoteId || quote.id
+              if (quoteIdToSet) {
+                console.log(`✅ ID du devis chargé: ${quoteIdToSet}`)
+                setCurrentQuoteId(quoteIdToSet)
+              } else {
+                console.warn('⚠️  Aucun ID de devis trouvé dans les données chargées')
+                setCurrentQuoteId(null)
+              }
               // Nettoyer localStorage après chargement
               localStorage.removeItem('inkoo_pro_quote_to_load')
               return
@@ -194,7 +214,14 @@ export default function QuotePage() {
         
         if (data.success && data.quote) {
           const quote = data.quote
-          setCurrentQuoteId(quote.id || null)
+          // S'assurer que l'ID est bien défini
+          if (quote.id) {
+            console.log(`✅ Devis chargé depuis /api/quotes/current avec ID: ${quote.id}`)
+            setCurrentQuoteId(quote.id)
+          } else {
+            console.warn('⚠️  Devis chargé mais sans ID')
+            setCurrentQuoteId(null)
+          }
           setQuoteTitle(quote.title || '')
           setSelectedProducts(quote.selectedProducts || [])
           setQuoteItems(quote.quoteItems || [])
