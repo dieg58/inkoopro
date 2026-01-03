@@ -24,6 +24,8 @@ const PUBLIC_PAGES = [
   '/',
   '/login',
   '/register',
+  '/forgot-password',
+  '/reset-password',
 ]
 
 export function ClientLayout({ children }: ClientLayoutProps) {

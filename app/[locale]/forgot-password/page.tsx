@@ -14,7 +14,8 @@ import Link from 'next/link'
 export default function ForgotPasswordPage() {
   const router = useRouter()
   const locale = useLocale()
-  const t = useTranslations()
+  const t = useTranslations('auth')
+  const tCommon = useTranslations('common')
   const { toast } = useToast()
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -25,8 +26,8 @@ export default function ForgotPasswordPage() {
     
     if (!email) {
       toast({
-        title: t('common.error'),
-        description: t('auth.emailRequired'),
+        title: tCommon('error'),
+        description: t('emailRequired'),
         variant: 'destructive',
       })
       return
@@ -48,20 +49,20 @@ export default function ForgotPasswordPage() {
       if (data.success) {
         setEmailSent(true)
         toast({
-          title: t('auth.passwordResetEmailSent'),
-          description: t('auth.passwordResetEmailDescription'),
+          title: t('passwordResetEmailSent'),
+          description: t('passwordResetEmailDescription'),
         })
       } else {
         toast({
-          title: t('auth.passwordResetError'),
-          description: data.message || data.error || t('auth.passwordResetErrorMessage'),
+          title: t('passwordResetError'),
+          description: data.message || data.error || t('passwordResetErrorMessage'),
           variant: 'destructive',
         })
       }
     } catch (error) {
       toast({
-        title: t('common.error'),
-        description: t('auth.connectionError'),
+        title: tCommon('error'),
+        description: t('connectionError'),
         variant: 'destructive',
       })
     } finally {
@@ -73,33 +74,33 @@ export default function ForgotPasswordPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>{t('auth.passwordResetEmailSent')}</CardTitle>
-            <CardDescription>
-              {t('auth.passwordResetEmailDescription')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {t('auth.checkYourEmail', { email })}
-              </p>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setEmailSent(false)
-                  setEmail('')
-                }}
-              >
-                {t('auth.sendAnotherEmail')}
+        <CardHeader>
+          <CardTitle>{t('passwordResetEmailSent')}</CardTitle>
+          <CardDescription>
+            {t('passwordResetEmailDescription')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('checkYourEmail', { email })}
+            </p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setEmailSent(false)
+                setEmail('')
+              }}
+            >
+              {t('sendAnotherEmail')}
+            </Button>
+            <Link href={`/${locale}/login`}>
+              <Button variant="ghost" className="w-full">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                {t('backToLogin')}
               </Button>
-              <Link href={`/${locale}/login`}>
-                <Button variant="ghost" className="w-full">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  {t('auth.backToLogin')}
-                </Button>
-              </Link>
+            </Link>
             </div>
           </CardContent>
         </Card>
@@ -111,19 +112,19 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>{t('auth.forgotPasswordTitle')}</CardTitle>
+          <CardTitle>{t('forgotPasswordTitle')}</CardTitle>
           <CardDescription>
-            {t('auth.forgotPasswordDescription')}
+            {t('forgotPasswordDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">{t('auth.email')}</Label>
+              <Label htmlFor="email">{t('email')}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder={t('auth.emailPlaceholder')}
+                placeholder={t('emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -134,16 +135,16 @@ export default function ForgotPasswordPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t('auth.sending')}
+                  {t('sending')}
                 </>
               ) : (
-                t('auth.sendResetEmail')
+                t('sendResetEmail')
               )}
             </Button>
             <Link href={`/${locale}/login`}>
               <Button variant="ghost" className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                {t('auth.backToLogin')}
+                {t('backToLogin')}
               </Button>
             </Link>
           </form>
