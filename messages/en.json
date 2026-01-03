@@ -102,7 +102,9 @@
     "notConfigured": "Not configured",
     "techniqueMinQuantityError": "Total quantity ({totalQuantity} piece(s)) is less than the minimum required ({minQuantity} piece(s)) for technique {technique}.",
     "saveDraft": "Save for later",
-    "downloadPDF": "Download PDF"
+    "downloadPDF": "Download PDF",
+    "addMarking": "Add marking",
+    "modifyMarking": "Modify marking"
   },
   "technique": {
     "selectTechnique": "Select a technique",

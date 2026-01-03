@@ -102,7 +102,9 @@
     "notConfigured": "Niet geconfigureerd",
     "techniqueMinQuantityError": "Totale hoeveelheid ({totalQuantity} stuk(s)) is minder dan het minimum vereiste ({minQuantity} stuk(s)) voor techniek {technique}.",
     "saveDraft": "Later opslaan",
-    "downloadPDF": "PDF downloaden"
+    "downloadPDF": "PDF downloaden",
+    "addMarking": "Markering toevoegen",
+    "modifyMarking": "Markering wijzigen"
   },
   "technique": {
     "selectTechnique": "Selecteer een techniek",

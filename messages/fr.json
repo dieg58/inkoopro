@@ -104,6 +104,7 @@
     "product": "produit(s)",
     "piece": "pièce(s)",
     "addMarking": "Ajouter un marquage",
+    "modifyMarking": "Modifier le marquage",
     "continueToReview": "Continuer vers le récapitulatif",
     "selectAtLeastOneProduct": "Veuillez sélectionner au moins un produit pour ce marquage",
     "minQuantityError": "La quantité totale pour ce marquage ({totalQuantity} pièce(s)) est inférieure à la quantité minimum requise ({minQuantity} pièce(s)) pour la technique {technique}.",
