@@ -68,7 +68,7 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
     // Synchroniser les produits par lots pour améliorer les performances
     const BATCH_SIZE = 100 // Traiter 100 produits à la fois
     let syncedCount = 0
-    let updatedCount = 0
+    let skippedCount = 0 // Produits déjà existants (ignorés)
     let createdCount = 0
     let errorCount = 0
     
@@ -90,7 +90,6 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
       
       // Préparer les données pour ce lot
       const toCreate: any[] = []
-      const toUpdate: any[] = []
       
       for (const product of batch) {
         try {
@@ -105,14 +104,9 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
           
           const now = new Date()
           if (existingIds.has(odooId)) {
-            // Mettre à jour
-            toUpdate.push({
-              where: { odooId },
-              data: {
-                ...cacheData,
-                lastSync: now,
-              },
-            })
+            // Produit déjà existant : passer au suivant sans mettre à jour
+            skippedCount++
+            continue
           } else {
             // Créer
             toCreate.push({
@@ -161,24 +155,13 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
         }
       }
       
-      // Exécuter les mises à jour une par une (Prisma ne supporte pas updateMany avec where unique)
-      if (toUpdate.length > 0) {
-        try {
-          await Promise.all(
-            toUpdate.map(update => prisma.productCache.update(update))
-          )
-          updatedCount += toUpdate.length
-          console.log(`   ✅ ${toUpdate.length} produit(s) mis à jour`)
-        } catch (error) {
-          console.error(`   ❌ Erreur lors de la mise à jour du lot:`, error)
-          errorCount += toUpdate.length
-        }
-      }
+      // Les produits existants sont maintenant ignorés (passage au suivant)
+      // Plus besoin de mettre à jour les produits existants
       
-      syncedCount += toCreate.length + toUpdate.length
+      syncedCount += toCreate.length
     }
     
-    console.log(`✅ Synchronisation terminée: ${createdCount} créé(s), ${updatedCount} mis à jour, ${errorCount} erreur(s), ${syncedCount} total`)
+    console.log(`✅ Synchronisation terminée: ${createdCount} créé(s), ${skippedCount} ignoré(s) (déjà existants), ${errorCount} erreur(s), ${syncedCount} total`)
     
     if (syncedCount === 0 && errorCount > 0) {
       return { success: false, count: 0, error: `Erreur lors de la synchronisation de ${errorCount} produit(s)` }
