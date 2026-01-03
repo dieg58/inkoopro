@@ -152,17 +152,33 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
       servicePricingLength: servicePricing.length,
       editingMarkingId,
       servicePricingData: servicePricing.find(p => p.technique === currentMarking.technique),
+      willBlock: minQuantity > 0 && totalQuantity < minQuantity,
     })
     
-    // Valider uniquement si minQuantity > 0 (si minQuantity = 0, pas de minimum requis)
+    // Valider la quantité minimum - BLOQUER si la quantité est insuffisante
+    // minQuantity peut être 0 si pas de minimum requis, sinon c'est la quantité minimum
     if (minQuantity > 0 && totalQuantity < minQuantity) {
-        toast({
-          title: t('insufficientQuantity'),
-          description: t('minQuantityError', { totalQuantity, minQuantity, technique: currentMarking.technique }),
-          variant: 'destructive',
-        })
-      return
+      const techniqueName = getTechniqueName(currentMarking.technique)
+      console.error('❌ BLOCAGE: Quantité insuffisante pour ajouter le marquage', {
+        technique: currentMarking.technique,
+        techniqueName,
+        totalQuantity,
+        minQuantity,
+      })
+      toast({
+        title: t('insufficientQuantity'),
+        description: t('minQuantityError', { totalQuantity, minQuantity, technique: techniqueName }),
+        variant: 'destructive',
+        duration: 8000,
+      })
+      return // BLOQUER l'ajout du marquage
     }
+    
+    console.log('✅ Validation quantité OK, ajout du marquage autorisé', {
+      technique: currentMarking.technique,
+      totalQuantity,
+      minQuantity,
+    })
 
     // Créer ou mettre à jour le marquage
     if (editingMarkingId) {
@@ -331,7 +347,7 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                 selectedTechnique={currentMarking.technique}
                 servicePricing={servicePricing}
                 onTechniqueChange={(technique) => {
-                  // Vérifier la quantité minimum avant d'autoriser la sélection de la technique
+                  // Permettre le changement de technique, mais afficher un avertissement si la quantité est insuffisante
                   if (technique && currentMarking.selectedProductIds.length > 0) {
                     const totalQuantity = getTotalQuantityForSelectedProducts(currentMarking.selectedProductIds)
                     
@@ -347,19 +363,20 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
                       servicePricingData: servicePricing.find(p => p.technique === technique),
                     })
                     
-                    // Valider la quantité minimum (uniquement si minQuantity > 0)
+                    // Afficher un avertissement si la quantité est insuffisante, mais permettre le changement
                     if (minQuantity > 0 && totalQuantity < minQuantity) {
                       const techniqueName = getTechniqueName(technique)
                       toast({
                         title: t('insufficientQuantity'),
-                        description: t('techniqueMinQuantityError', { technique: techniqueName, minQuantity, totalQuantity }),
+                        description: t('techniqueMinQuantityError', { technique: techniqueName, minQuantity, totalQuantity }) + ' Vous pouvez continuer, mais vous devrez ajuster la quantité avant d\'ajouter le marquage.',
                         variant: 'destructive',
-                        duration: 6000, // Afficher plus longtemps pour que le message soit lu
+                        duration: 8000, // Afficher plus longtemps pour que le message soit lu
                       })
-                      return // Empêcher la sélection de la technique
+                      // Ne pas empêcher le changement, mais continuer avec l'avertissement
                     }
                   }
                   
+                  // Toujours permettre le changement de technique
                   setCurrentMarking({
                     ...currentMarking,
                     technique,

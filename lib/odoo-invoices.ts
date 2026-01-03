@@ -21,7 +21,6 @@ export interface OdooInvoice {
   partner_id: [number, string] // [ID, Nom du client]
   move_type: string // Type: out_invoice (facture client), in_invoice (facture fournisseur)
   ref: string | null // Référence
-  origin: string | null // Origine (ex: numéro de commande)
 }
 
 /**
@@ -185,7 +184,6 @@ export async function getInvoicesFromOdoo(client: { email: string; partnerId: nu
       partner_id: inv.partner_id || [0, ''],
       move_type: inv.move_type || 'out_invoice',
       ref: inv.ref || null,
-      origin: inv.origin || null,
     }))
   } catch (error) {
     console.error('❌ Erreur récupération factures Odoo:', error)

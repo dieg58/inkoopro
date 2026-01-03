@@ -18,6 +18,7 @@ export default function InvoicesPage() {
   const { toast } = useToast()
   const [invoices, setInvoices] = useState<OdooInvoice[]>([])
   const [loading, setLoading] = useState(true)
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<number | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -76,17 +77,51 @@ export default function InvoicesPage() {
     }).format(amount)
   }
 
-  const handleDownloadInvoice = (invoiceId: number) => {
-    // Télécharger la facture depuis Odoo
-    const odooUrl = process.env.NEXT_PUBLIC_ODOO_URL
-    if (odooUrl) {
-      window.open(`${odooUrl}/web#id=${invoiceId}&model=account.move&view_type=form`, '_blank')
-    } else {
+  const handleDownloadInvoice = async (invoiceId: number) => {
+    try {
+      setDownloadingInvoiceId(invoiceId)
+      
+      // Télécharger le PDF depuis notre API
+      const response = await fetch(`/api/invoices/${invoiceId}/pdf`)
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors du téléchargement')
+      }
+
+      // Récupérer le PDF en tant que blob
+      const blob = await response.blob()
+      
+      // Créer un lien de téléchargement
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      
+      // Récupérer le nom du fichier depuis les headers
+      const contentDisposition = response.headers.get('Content-Disposition')
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') || `facture_${invoiceId}.pdf`
+        : `facture_${invoiceId}.pdf`
+      
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: 'Succès',
+        description: 'Facture téléchargée avec succès',
+      })
+    } catch (error) {
+      console.error('Erreur téléchargement facture:', error)
       toast({
         title: 'Erreur',
-        description: 'URL Odoo non configurée',
+        description: error instanceof Error ? error.message : 'Erreur lors du téléchargement de la facture',
         variant: 'destructive',
       })
+    } finally {
+      setDownloadingInvoiceId(null)
     }
   }
 
@@ -184,8 +219,7 @@ export default function InvoicesPage() {
                               {invoice.name}
                             </CardTitle>
                             <CardDescription className="mt-1">
-                              {invoice.origin && `Commande: ${invoice.origin}`}
-                              {invoice.ref && ` • Réf: ${invoice.ref}`}
+                              {invoice.ref && `Réf: ${invoice.ref}`}
                             </CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
@@ -236,9 +270,19 @@ export default function InvoicesPage() {
                           <Button
                             variant="outline"
                             onClick={() => handleDownloadInvoice(invoice.id)}
+                            disabled={downloadingInvoiceId === invoice.id}
                           >
-                            <Download className="h-4 w-4 mr-2" />
-                            Télécharger
+                            {downloadingInvoiceId === invoice.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Téléchargement...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-4 w-4 mr-2" />
+                                Télécharger
+                              </>
+                            )}
                           </Button>
                         </div>
                       </CardContent>

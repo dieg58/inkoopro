@@ -210,10 +210,21 @@ export function getMinQuantityForTechnique(
   technique: 'serigraphie' | 'broderie' | 'dtf',
   pricing: ServicePricing[]
 ): number {
+  // Vérifier que pricing est un tableau valide
+  if (!Array.isArray(pricing) || pricing.length === 0) {
+    console.warn(`⚠️ Pricing invalide ou vide pour ${technique}, utilisation des valeurs par défaut`)
+    const defaultTechniquePricing = defaultPricing.find((p: ServicePricing) => p.technique === technique)
+    if (defaultTechniquePricing && typeof defaultTechniquePricing.minQuantity === 'number') {
+      console.log(`📊 Quantité minimum pour ${technique}: ${defaultTechniquePricing.minQuantity} (valeur par défaut, pricing vide)`)
+      return defaultTechniquePricing.minQuantity
+    }
+    return 1
+  }
+  
   const techniquePricing = pricing.find(p => p.technique === technique)
   
   // Si on trouve le pricing et que minQuantity est défini, l'utiliser
-  if (techniquePricing && typeof techniquePricing.minQuantity === 'number') {
+  if (techniquePricing && typeof techniquePricing.minQuantity === 'number' && techniquePricing.minQuantity >= 0) {
     console.log(`📊 Quantité minimum pour ${technique}: ${techniquePricing.minQuantity} (depuis DB)`)
     return techniquePricing.minQuantity
   }

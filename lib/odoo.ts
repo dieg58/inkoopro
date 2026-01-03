@@ -2032,6 +2032,15 @@ export async function createQuoteInOdoo(
       console.warn(`⚠️ Erreur lors de la recherche du transporteur:`, error)
     }
 
+    // Calculer le total des pièces
+    const totalPieces = quote.items.reduce((total, item) => {
+      return total + item.colorQuantities.reduce((itemTotal, cq) => {
+        return itemTotal + cq.quantities.reduce((sum, q) => sum + q.quantity, 0)
+      }, 0)
+    }, 0)
+    
+    console.log(`📊 Total des pièces calculé: ${totalPieces}`)
+
     // Créer le devis dans Odoo avec execute_kw
     const saleOrderData: any = {
       partner_id: partnerId, // ID du client connecté
@@ -2043,6 +2052,9 @@ export async function createQuoteInOdoo(
     if (quote.title) {
       saleOrderData.title = quote.title
     }
+    
+    // Ajouter le total des pièces dans le champ x_total_pieces (champ personnalisé Odoo)
+    saleOrderData.x_total_pieces = totalPieces
 
     // Ne pas ajouter production_date et order_speed ici car ils peuvent causer une erreur
     // Ces champs seront ajoutés après la création via write() si nécessaire
@@ -2064,6 +2076,7 @@ export async function createQuoteInOdoo(
       partner_id: partnerId,
       order_line_count: orderLines.length,
       note_length: note.length,
+      total_pieces: totalPieces,
       production_date: productionDateStr,
       order_speed: orderSpeed,
       delivery_method: deliveryMethodId ? `ID: ${deliveryMethodId}` : 'Dans les notes',
