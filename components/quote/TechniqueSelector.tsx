@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
-import { techniques, techniqueConfig, positionConfig, positionLabels, embroideryTypographies, dtfTypographies, basePantoneColors } from '@/lib/data'
+import { techniques, techniqueConfig, positionConfig, positionLabels, embroideryTypographies, dtfTypographies, basePantoneColors, pantoneColorMap } from '@/lib/data'
 import { ServicePricing } from '@/types'
 import { Plus, Trash2, Upload, X } from 'lucide-react'
 
@@ -553,16 +553,43 @@ export function TechniqueSelector({
                               }}
                             >
                               <SelectTrigger>
-                                <SelectValue />
+                                <SelectValue>
+                                  {isCustom ? (
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400 flex-shrink-0" />
+                                      <span>{customCode || t('customPantone')}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center space-x-2">
+                                      <div 
+                                        className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                        style={{ backgroundColor: pantoneColorMap[currentColor.code] || '#CCCCCC' }}
+                                      />
+                                      <span>{currentColor.code}</span>
+                                    </div>
+                                  )}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                {basePantoneColors.map((color) => (
-                                  <SelectItem key={color} value={color}>
-                                    {color}
-                                  </SelectItem>
-                                ))}
+                                {basePantoneColors.map((color) => {
+                                  const hexColor = pantoneColorMap[color] || '#CCCCCC'
+                                  return (
+                                    <SelectItem key={color} value={color}>
+                                      <div className="flex items-center space-x-2">
+                                        <div 
+                                          className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                          style={{ backgroundColor: hexColor }}
+                                        />
+                                        <span>{color}</span>
+                                      </div>
+                                    </SelectItem>
+                                  )
+                                })}
                                 <SelectItem value="custom">
-                                  {t('customPantone')} (+25€)
+                                  <div className="flex items-center space-x-2">
+                                    <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400 flex-shrink-0" />
+                                    <span>{t('customPantone')} (+25€)</span>
+                                  </div>
                                 </SelectItem>
                               </SelectContent>
                             </Select>
@@ -795,12 +822,29 @@ export function TechniqueSelector({
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('selectTypography')} />
+                      <SelectValue placeholder={t('selectTypography')}>
+                        {(localOptions as BroderieOptions).typography && (
+                          <div className="flex items-center space-x-2">
+                            <span 
+                              style={{ fontFamily: (localOptions as BroderieOptions).typography }} 
+                              className="text-lg"
+                            >
+                              Aa
+                            </span>
+                            <span>{(localOptions as BroderieOptions).typography}</span>
+                          </div>
+                        )}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {embroideryTypographies.map((typography) => (
                         <SelectItem key={typography} value={typography}>
-                          {typography}
+                          <div className="flex items-center space-x-2">
+                            <span style={{ fontFamily: typography }} className="text-lg">
+                              Aa
+                            </span>
+                            <span>{typography}</span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -885,16 +929,43 @@ export function TechniqueSelector({
                               }}
                             >
                               <SelectTrigger>
-                                <SelectValue />
+                                <SelectValue>
+                                  {isCustom ? (
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400 flex-shrink-0" />
+                                      <span>{customCode || t('customPantone')}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center space-x-2">
+                                      <div 
+                                        className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                        style={{ backgroundColor: pantoneColorMap[currentColor.code] || '#CCCCCC' }}
+                                      />
+                                      <span>{currentColor.code}</span>
+                                    </div>
+                                  )}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                {basePantoneColors.map((color) => (
-                                  <SelectItem key={color} value={color}>
-                                    {color}
-                                  </SelectItem>
-                                ))}
+                                {basePantoneColors.map((color) => {
+                                  const hexColor = pantoneColorMap[color] || '#CCCCCC'
+                                  return (
+                                    <SelectItem key={color} value={color}>
+                                      <div className="flex items-center space-x-2">
+                                        <div 
+                                          className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                          style={{ backgroundColor: hexColor }}
+                                        />
+                                        <span>{color}</span>
+                                      </div>
+                                    </SelectItem>
+                                  )
+                                })}
                                 <SelectItem value="custom">
-                                  {t('customPantone')} (+25€)
+                                  <div className="flex items-center space-x-2">
+                                    <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400 flex-shrink-0" />
+                                    <span>{t('customPantone')} (+25€)</span>
+                                  </div>
                                 </SelectItem>
                               </SelectContent>
                             </Select>
@@ -1021,12 +1092,29 @@ export function TechniqueSelector({
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('selectTypography')} />
+                      <SelectValue placeholder={t('selectTypography')}>
+                        {(localOptions as DTFOptions).typography && (
+                          <div className="flex items-center space-x-2">
+                            <span 
+                              style={{ fontFamily: (localOptions as DTFOptions).typography }} 
+                              className="text-lg"
+                            >
+                              Aa
+                            </span>
+                            <span>{(localOptions as DTFOptions).typography}</span>
+                          </div>
+                        )}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {dtfTypographies.map((typography) => (
                         <SelectItem key={typography} value={typography}>
-                          {typography}
+                          <div className="flex items-center space-x-2">
+                            <span style={{ fontFamily: typography }} className="text-lg">
+                              Aa
+                            </span>
+                            <span>{typography}</span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>

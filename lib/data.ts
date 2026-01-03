@@ -205,6 +205,62 @@ export const dtfTypographies = [
   'Raleway',
 ]
 
+// Mapping des couleurs Pantone avec leurs codes hexadécimales approximatifs
+export const pantoneColorMap: Record<string, string> = {
+  'Pantone Black C': '#2B2926',
+  'Pantone White': '#FFFFFF',
+  'Pantone 186 C': '#E03C31', // Rouge
+  'Pantone 286 C': '#003DA5', // Bleu
+  'Pantone 354 C': '#00B04F', // Vert
+  'Pantone Yellow C': '#FFD700',
+  'Pantone Orange 021 C': '#FF6600',
+  'Pantone Purple C': '#B932A8',
+  'Pantone 285 C': '#0054A4', // Bleu foncé
+  'Pantone 199 C': '#E4007C', // Rose
+  'Pantone 300 C': '#0066CC', // Bleu clair
+  'Pantone 361 C': '#00B04F', // Vert clair
+  'Pantone 485 C': '#C8102E', // Rouge foncé
+  'Pantone 032 C': '#EF3340', // Rouge vif
+  'Pantone 072 C': '#1E3A8A', // Bleu royal
+  'Pantone 347 C': '#00A651', // Vert émeraude
+  'Pantone 1235 C': '#F5C842', // Jaune doré
+  'Pantone 1375 C': '#FF8C00', // Orange vif
+  'Pantone 2727 C': '#5B9BD5', // Bleu ciel
+  'Pantone 375 C': '#7ED321', // Vert lime
+  'Pantone 877 C': '#C0C0C0', // Argent
+  'Pantone 871 C': '#D4AF37', // Or
+  'Pantone 1795 C': '#FF6B6B', // Rouge corail
+  'Pantone 2935 C': '#003366', // Bleu marine
+  'Pantone 348 C': '#006B3C', // Vert forêt
+  'Pantone 116 C': '#FFEB3B', // Jaune citron
+  'Pantone 1655 C': '#FF5722', // Orange brûlé
+  'Pantone 2735 C': '#2196F3', // Bleu électrique
+  'Pantone 356 C': '#4CAF50', // Vert menthe
+  'Pantone 200 C': '#8B0000', // Rouge bordeaux
+  'Pantone 2995 C': '#00BCD4', // Bleu turquoise
+  'Pantone 382 C': '#CDDC39', // Vert jaune
+  'Pantone 1805 C': '#D32F2F', // Rouge cerise
+  'Pantone 3015 C': '#607D8B', // Bleu acier
+  'Pantone 3265 C': '#009688', // Vert océan
+  'Pantone 130 C': '#FFC107', // Jaune moutarde
+  'Pantone 1585 C': '#FF9800', // Orange pêche
+  'Pantone 281 C': '#0D47A1', // Bleu nuit
+  'Pantone 3405 C': '#00796B', // Vert jade
+  'Pantone 201 C': '#C62828', // Rouge sang
+  'Pantone 3125 C': '#00ACC1', // Bleu cyan
+  'Pantone 368 C': '#8BC34A', // Vert pomme
+  'Pantone 124 C': '#FFB300', // Jaune or
+  'Pantone 1665 C': '#FF3D00', // Orange feu
+  'Pantone 2765 C': '#3F51B5', // Bleu indigo
+  'Pantone 350 C': '#2E7D32', // Vert sapin
+  'Pantone 188 C': '#B71C1C', // Rouge foncé
+  'Pantone 306 C': '#03A9F4', // Bleu azur
+  'Pantone 364 C': '#66BB6A', // Vert printemps
+  'Pantone 109 C': '#FFC400', // Jaune soleil
+  'Pantone 1595 C': '#E64A19', // Orange terracotta
+  'Pantone 280 C': '#0A2463', // Bleu marine foncé
+}
+
 // Liste des 52 couleurs Pantone de base disponibles sans surcoût pour la sérigraphie
 export const basePantoneColors = [
   'Pantone Black C',
