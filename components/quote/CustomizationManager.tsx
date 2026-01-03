@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { SelectedProduct, TechniqueType, TechniqueOptions, Position, ProductCategory, ServicePricing } from '@/types'
 import { ProductMultiSelector } from './ProductMultiSelector'
@@ -47,6 +47,10 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
   })
   const [servicePricing, setServicePricing] = useState<ServicePricing[]>([])
   const [editingMarkingId, setEditingMarkingId] = useState<string | null>(null) // ID du marquage en cours d'édition
+  const lastSentMarkingsRef = useRef<string>('') // Pour éviter les boucles infinies
+  const validatedMarkingsRef = useRef<Marking[]>([]) // Pour stocker les marquages validés
+  const onMarkingsChangeRef = useRef(onMarkingsChange) // Stocker la fonction callback dans une ref
+  const lastCurrentMarkingRef = useRef<string>('') // Pour comparer les changements de currentMarking
 
   // Charger les prix des services
   useEffect(() => {
@@ -75,34 +79,28 @@ export function CustomizationManager({ selectedProducts, onComplete, onMarkingsC
     }, 0)
   }
 
-  // Mettre à jour le récapitulatif en temps réel avec le marquage en cours
+  // Mettre à jour la ref du callback à chaque rendu
   useEffect(() => {
-    if (!onMarkingsChange) return
+    onMarkingsChangeRef.current = onMarkingsChange
+  }, [onMarkingsChange])
+  
+  // Mettre à jour les marquages validés quand markings change (mais pas à cause du marquage temporaire)
+  useEffect(() => {
+    // Filtrer les marquages temporaires
+    const validated = markings.filter(m => !m.id.startsWith('temp-'))
+    const validatedString = JSON.stringify(validated)
+    const currentValidatedString = JSON.stringify(validatedMarkingsRef.current)
     
-    // Si le marquage en cours a des données valides, l'inclure dans la liste pour le récapitulatif
-    const hasValidCurrentMarking = 
-      currentMarking.selectedProductIds.length > 0 &&
-      currentMarking.technique &&
-      currentMarking.techniqueOptions &&
-      currentMarking.position !== null
-    
-    if (hasValidCurrentMarking) {
-      // Créer un marquage temporaire pour le récapitulatif
-      const tempMarking: Marking = {
-        id: 'temp-current',
-        selectedProductIds: currentMarking.selectedProductIds,
-        technique: currentMarking.technique,
-        techniqueOptions: currentMarking.techniqueOptions,
-        position: currentMarking.position,
-        files: currentMarking.files,
-        notes: currentMarking.notes,
-      }
-      onMarkingsChange([...markings, tempMarking])
-    } else {
-      // Sinon, envoyer uniquement les marquages validés
-      onMarkingsChange(markings)
+    // Mettre à jour seulement si les marquages validés ont vraiment changé
+    if (validatedString !== currentValidatedString) {
+      validatedMarkingsRef.current = validated
     }
-  }, [currentMarking, markings, onMarkingsChange])
+  }, [markings])
+  
+  // DÉSACTIVÉ : Mise à jour en temps réel du récapitulatif
+  // Cette fonctionnalité causait des boucles infinies
+  // Le récapitulatif sera mis à jour uniquement lors des actions explicites (ajout, suppression, modification)
+  // Si vous avez besoin de cette fonctionnalité, il faudra repenser l'architecture pour éviter les boucles
 
   // Obtenir la catégorie du produit (prendre la première catégorie des produits sélectionnés)
   const getProductCategory = (): ProductCategory => {

@@ -56,9 +56,17 @@ export function TechniqueSelector({
   const lastBroderieNombreCouleurs = useRef<number | null>(null) // Dernière valeur de nombreCouleurs pour la broderie
 
   // Synchroniser localOptions avec options venant de l'extérieur
+  // Utiliser une comparaison JSON pour éviter les boucles infinies
+  const lastOptionsRef = useRef<string>('')
   useEffect(() => {
-    if (options && options !== localOptions && !isInternalUpdate.current) {
-      setLocalOptions(options)
+    if (options && !isInternalUpdate.current) {
+      const optionsString = JSON.stringify(options)
+      const localOptionsString = JSON.stringify(localOptions)
+      // Ne synchroniser que si les options ont vraiment changé
+      if (optionsString !== localOptionsString && optionsString !== lastOptionsRef.current) {
+        lastOptionsRef.current = optionsString
+        setLocalOptions(options)
+      }
     }
     isInternalUpdate.current = false
   }, [options, localOptions])
@@ -301,6 +309,7 @@ export function TechniqueSelector({
         }
         newColors.splice(serigraphieNombreCouleurs)
         // Utiliser setLocalOptions directement avec le flag pour éviter les boucles
+        // Le useEffect de synchronisation appellera onOptionsChange si nécessaire
         isInternalUpdate.current = true
         setLocalOptions({
           ...localOptions,
@@ -343,15 +352,9 @@ export function TechniqueSelector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTechnique, broderieNombreCouleurs])
 
-  // Synchroniser localOptions avec onOptionsChange (sans positions pour éviter les boucles)
-  useEffect(() => {
-    if (localOptions && !isInternalUpdate.current) {
-      onOptionsChange(localOptions)
-    }
-    // Réinitialiser le flag après chaque render
-    isInternalUpdate.current = false
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localOptions])
+  // DÉSACTIVÉ : Synchronisation automatique de localOptions vers onOptionsChange
+  // Cette synchronisation causait des boucles infinies
+  // onOptionsChange est maintenant appelé uniquement via updateOptions lors des actions explicites de l'utilisateur
 
   // Synchroniser le nombre d'emplacements (toujours 1 maintenant)
   useEffect(() => {
@@ -367,8 +370,12 @@ export function TechniqueSelector({
 
   const updateOptions = (updates: Partial<TechniqueOptions>) => {
     if (localOptions) {
+      const updatedOptions = { ...localOptions, ...updates } as TechniqueOptions
       isInternalUpdate.current = true
-      setLocalOptions({ ...localOptions, ...updates })
+      setLocalOptions(updatedOptions)
+      // Appeler onOptionsChange directement pour éviter les boucles
+      // Le flag isInternalUpdate empêchera la synchronisation inverse
+      onOptionsChange(updatedOptions)
     }
   }
 

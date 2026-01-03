@@ -740,7 +740,7 @@ export function OrderSummary({
               // Afficher l'erreur si le prix n'est pas disponible
               if (priceDetails.error) {
                 return (
-                  <div key={marking.id || index} className="space-y-1">
+                  <div key={`${marking.id}-${index}`} className="space-y-1">
                     <Alert variant="destructive">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
@@ -785,7 +785,7 @@ export function OrderSummary({
               const baseTotal = pricePerEmplacement * priceDetails.emplacements
               
               return (
-                <div key={marking.id || index} className="space-y-1">
+                <div key={`${marking.id}-${index}`} className="space-y-1">
                   <div className="flex justify-between items-start text-sm">
                     <div className="flex-1">
                       <div className="font-medium">
