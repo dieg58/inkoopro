@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientFromSession } from '@/lib/odoo-auth'
+import { fromPrismaJson } from '@/lib/prisma-json'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,18 +60,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, quote: null })
     }
 
-    // Désérialiser les champs JSON pour SQLite
-    const parseJsonField = (field: any) => {
-      if (typeof field === 'string') {
-        try {
-          return JSON.parse(field)
-        } catch {
-          return field
-        }
-      }
-      return field
-    }
-
     return NextResponse.json({
       success: true,
       quote: {
@@ -78,14 +67,14 @@ export async function GET(request: NextRequest) {
         title: quote.title,
         status: quote.status,
         step: quote.step,
-        selectedProducts: parseJsonField(quote.selectedProducts),
-        quoteItems: parseJsonField(quote.quoteItems),
-        currentMarkings: parseJsonField(quote.markings),
+        selectedProducts: fromPrismaJson(quote.selectedProducts),
+        quoteItems: fromPrismaJson(quote.quoteItems),
+        currentMarkings: fromPrismaJson(quote.markings),
         delivery: {
           type: quote.deliveryType,
-          address: parseJsonField(quote.deliveryAddress),
+          address: fromPrismaJson(quote.deliveryAddress),
           billingAddressDifferent: quote.billingAddressDifferent,
-          billingAddress: parseJsonField(quote.billingAddress),
+          billingAddress: fromPrismaJson(quote.billingAddress),
           individualPackaging: quote.individualPackaging || false,
           newCarton: quote.newCarton || false,
         },

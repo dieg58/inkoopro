@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientFromSession } from '@/lib/odoo-auth'
+import { fromPrismaJson, toPrismaJson } from '@/lib/prisma-json'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,7 +116,7 @@ export async function PUT(request: NextRequest) {
         where: { id: dbClient.id },
         data: {
           defaultDeliveryMethod: normalizedMethod,
-          defaultDeliveryAddress: normalizedAddress,
+          defaultDeliveryAddress: toPrismaJson(normalizedAddress),
         },
       })
     }

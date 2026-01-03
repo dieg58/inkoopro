@@ -1,6 +1,7 @@
 import { Product, ProductCategory } from '@/types'
 import { getProductsFromOdoo } from './odoo-products'
 import { prisma } from '@/lib/prisma'
+import { isSQLite } from './prisma-json'
 
 /**
  * Convertit un Product en données pour ProductCache
@@ -130,10 +131,28 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
       if (toCreate.length > 0) {
         try {
           // Utiliser createMany pour créer plusieurs produits en une seule transaction
-          await prisma.productCache.createMany({
-            data: toCreate,
-            skipDuplicates: true, // Ignorer les doublons si présents
-          })
+          // SQLite ne supporte pas skipDuplicates, on doit filtrer manuellement
+          // PostgreSQL supporte skipDuplicates
+          if (isSQLite()) {
+            // Pour SQLite, créer un par un avec gestion d'erreur
+            for (const product of toCreate) {
+              try {
+                await prisma.productCache.create({ data: product })
+              } catch (error: any) {
+                // Ignorer les erreurs de doublon (code P2002)
+                if (error.code !== 'P2002') {
+                  throw error
+                }
+              }
+            }
+          } else {
+            // Pour PostgreSQL, utiliser createMany avec skipDuplicates
+            // Type assertion nécessaire car TypeScript ne détecte pas le support PostgreSQL
+            await (prisma.productCache.createMany as any)({
+              data: toCreate,
+              skipDuplicates: true,
+            })
+          }
           createdCount += toCreate.length
           console.log(`   ✅ ${toCreate.length} produit(s) créé(s)`)
         } catch (error) {

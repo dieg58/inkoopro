@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientFromSession } from '@/lib/odoo-auth'
+import { toPrismaJson, fromPrismaJson } from '@/lib/prisma-json'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,17 +92,17 @@ export async function POST(request: NextRequest) {
       clientCompany: clientInfo?.company || client.company,
       clientPhone: clientInfo?.phone || client.phone,
       deliveryType: safeDelivery.type || 'pickup',
-      deliveryAddress: safeDelivery.address ? JSON.stringify(safeDelivery.address) : null,
+      deliveryAddress: toPrismaJson(safeDelivery.address),
       billingAddressDifferent: safeDelivery.billingAddressDifferent || false,
-      billingAddress: safeDelivery.billingAddress ? JSON.stringify(safeDelivery.billingAddress) : null,
+      billingAddress: toPrismaJson(safeDelivery.billingAddress),
       individualPackaging: safeDelivery.individualPackaging || false,
       newCarton: safeDelivery.newCarton || false,
       delayWorkingDays: safeDelay.workingDays || 10,
       delayType: safeDelay.type || 'standard',
       delayExpressDays: safeDelay.expressDays || null,
-      selectedProducts: JSON.stringify(selectedProducts || []),
-      markings: JSON.stringify(currentMarkings || []),
-      quoteItems: JSON.stringify(quoteItems || []),
+      selectedProducts: toPrismaJson(selectedProducts || []),
+      markings: toPrismaJson(currentMarkings || []),
+      quoteItems: toPrismaJson(quoteItems || []),
       totalHT: totalHT,
     }
 
@@ -111,16 +112,10 @@ export async function POST(request: NextRequest) {
       console.log(`🔄 Mise à jour du devis existant: ${existingQuote.id}`)
       quote = await prisma.quote.update({
         where: { id: existingQuote.id },
-        data: {
-          ...baseQuoteData,
-          client: {
-            connect: { id: dbClient.id }
-          }
-        },
+        data: baseQuoteData,
       })
-      const selectedProductsCount = typeof quote.selectedProducts === 'string' 
-        ? JSON.parse(quote.selectedProducts || '[]').length 
-        : (Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0)
+      const selectedProducts = fromPrismaJson(quote.selectedProducts)
+      const selectedProductsCount = Array.isArray(selectedProducts) ? selectedProducts.length : 0
       console.log(`✅ Devis mis à jour: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${selectedProductsCount}`)
     } else {
       // Créer un nouveau devis
@@ -133,9 +128,8 @@ export async function POST(request: NextRequest) {
           }
         },
       })
-      const selectedProductsCount = typeof quote.selectedProducts === 'string' 
-        ? JSON.parse(quote.selectedProducts || '[]').length 
-        : (Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0)
+      const selectedProducts = fromPrismaJson(quote.selectedProducts)
+      const selectedProductsCount = Array.isArray(selectedProducts) ? selectedProducts.length : 0
       console.log(`✅ Nouveau devis créé: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${selectedProductsCount}`)
     }
 
