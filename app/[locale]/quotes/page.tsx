@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, FileText, Edit, Plus } from 'lucide-react'
+import { Loader2, FileText, Edit, Plus, Trash2 } from 'lucide-react'
 import { LanguageSelector } from '@/components/LanguageSelector'
 
 interface SavedQuote {
@@ -85,6 +85,53 @@ export default function QuotesPage() {
       hour: '2-digit',
       minute: '2-digit',
     }).format(date)
+  }
+
+  const handleDeleteQuote = async (quoteId: string, quoteTitle: string) => {
+    // Demander confirmation avant de supprimer
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer le devis "${quoteTitle || 'sans titre'}" ? Cette action est irréversible.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.status === 401) {
+        toast({
+          title: t('common.error'),
+          description: 'Votre session a expiré. Veuillez vous reconnecter.',
+          variant: 'destructive',
+        })
+        router.push(`/${locale}/login`)
+        return
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast({
+          title: 'Devis supprimé',
+          description: 'Le devis a été supprimé avec succès.',
+        })
+        // Recharger la liste des devis
+        loadData()
+      } else {
+        toast({
+          title: t('common.error'),
+          description: data.error || 'Erreur lors de la suppression du devis',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Erreur suppression devis:', error)
+      toast({
+        title: t('common.error'),
+        description: 'Erreur lors de la suppression du devis',
+        variant: 'destructive',
+      })
+    }
   }
 
   if (loading) {
@@ -213,6 +260,14 @@ export default function QuotesPage() {
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Modifier
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteQuote(quote.id, quote.title || 'sans titre')}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Supprimer
                       </Button>
                     </div>
                   </div>

@@ -1,4 +1,4 @@
-// This is your Prisma schema file for PostgreSQL (production)
+// This is your Prisma schema file for SQLite (development local)
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -6,9 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // PostgreSQL pour production
+  provider = "sqlite" // Développement local avec SQLite
   url      = env("DATABASE_URL")
-  // Pour la production avec PostgreSQL : DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
+  // Pour le développement local : DATABASE_URL="file:./prisma/dev.db"
 }
 
 // Sessions utilisateur
@@ -38,7 +38,6 @@ model Client {
   zip                 String?
   country             String?
   defaultDeliveryMethod String? // 'pickup' | 'transporteur' | 'coursier'
-  defaultDeliveryAddress Json?    // Adresse de livraison par défaut (si différente de l'adresse de facturation Odoo)
   status              String   @default("pending") // 'pending' | 'approved' | 'rejected'
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -74,9 +73,9 @@ model Quote {
   // Livraison
   deliveryType    String   // 'livraison' | 'pickup'
   deliveryMethod  String?  // 'pickup' | 'transporteur' | 'coursier' (uniquement si type = 'livraison')
-  deliveryAddress Json?    // { street, city, zip, country }
+  deliveryAddress String?  // JSON string (SQLite ne supporte pas Json nativement)
   billingAddressDifferent Boolean @default(false)
-  billingAddress  Json?    // { street, city, zip, country }
+  billingAddress  String?  // JSON string (SQLite ne supporte pas Json nativement)
   individualPackaging Boolean @default(false) // Emballage individuel (conditionnement sous pochette plastique)
   newCarton        Boolean @default(false) // Carton neuf (au lieu d'un carton réutilisé)
   
@@ -86,9 +85,9 @@ model Quote {
   delayExpressDays Int?
   
   // Données du devis
-  selectedProducts Json    // SelectedProduct[]
-  markings         Json    // Marking[]
-  quoteItems       Json    // QuoteItem[]
+  selectedProducts String   // JSON string (SQLite ne supporte pas Json nativement)
+  markings         String   // JSON string (SQLite ne supporte pas Json nativement)
+  quoteItems       String   // JSON string (SQLite ne supporte pas Json nativement)
   
   // Totaux
   totalHT          Float
@@ -137,9 +136,7 @@ model ServicePricing {
   minQuantity     Int
   quantityRanges  String   // JSON array
   colorCounts     String?  // JSON array (pour sérigraphie)
-  pointRanges     String?  // JSON array (pour broderie) - Rétrocompatibilité
-  pointRangesPetite String? // JSON array pour petite broderie (max 10x10cm)
-  pointRangesGrande String? // JSON array pour grande broderie (max 20x25cm)
+  pointRanges     String?  // JSON array (pour broderie)
   dimensions      String?  // JSON array (pour DTF)
   prices          String   // JSON object (cross-table prices) - pour DTF uniquement
   pricesClair     String?  // JSON object pour sérigraphie textile clair
@@ -164,8 +161,6 @@ model PricingConfig {
   individualPackagingPrice Float   @default(0.10) // Prix par pièce pour l'emballage individuel (€ HT)
   newCartonPrice          Float   @default(2.00) // Prix par carton pour un carton neuf (€ HT)
   vectorizationPrice      Float   @default(25.00) // Prix pour la vectorisation d'un logo par le graphiste (€ HT)
-  courierPricePerKm       Float   @default(1.50) // Prix par km pour le coursier (€ HT)
-  courierMinimumFee       Float   @default(15.00) // Forfait minimum pour le coursier (€ HT)
   updatedAt               DateTime @updatedAt
 }
 
@@ -180,37 +175,5 @@ model ServiceOdooMapping {
   updatedAt       DateTime @updatedAt
   
   @@unique([technique, textileType])
-}
-
-// Mapping des frais fixes et options vers les produits Odoo
-model ServiceOdooFeeMapping {
-  id              String   @id @default(cuid())
-  mappingType     String   // 'fixedFee' | 'option'
-  technique       String   // 'serigraphie' | 'broderie' | 'dtf'
-  feeType         String?  // Pour fixedFee: 'colorFee' (sérigraphie), 'smallDigitization' | 'largeDigitization' (broderie)
-  optionId        String?  // Pour option: l'ID de l'option (ex: 'discharge', 'gold', 'phospho')
-  odooProductName String   // Nom du produit Odoo correspondant
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([mappingType, technique, feeType, optionId])
-}
-
-// Mapping des méthodes de livraison vers les références produits Odoo (default_code)
-model DeliveryOdooMapping {
-  id              String   @id @default(cuid())
-  deliveryType    String   @unique // 'pickup' | 'dpd' | 'client_carrier' | 'courier'
-  odooProductCode String   // Référence interne (default_code) du produit Odoo
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-
-// Mapping des options (emballage individuel, cartons neufs, vectorisation) vers les références produits Odoo (default_code)
-model OptionOdooMapping {
-  id              String   @id @default(cuid())
-  optionType      String   @unique // 'individualPackaging' | 'newCarton' | 'vectorization'
-  odooProductCode String   // Référence interne (default_code) du produit Odoo
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 }
 

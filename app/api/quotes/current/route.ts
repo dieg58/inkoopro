@@ -59,6 +59,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, quote: null })
     }
 
+    // Désérialiser les champs JSON pour SQLite
+    const parseJsonField = (field: any) => {
+      if (typeof field === 'string') {
+        try {
+          return JSON.parse(field)
+        } catch {
+          return field
+        }
+      }
+      return field
+    }
+
     return NextResponse.json({
       success: true,
       quote: {
@@ -66,14 +78,14 @@ export async function GET(request: NextRequest) {
         title: quote.title,
         status: quote.status,
         step: quote.step,
-        selectedProducts: quote.selectedProducts,
-        quoteItems: quote.quoteItems,
-        currentMarkings: quote.markings,
+        selectedProducts: parseJsonField(quote.selectedProducts),
+        quoteItems: parseJsonField(quote.quoteItems),
+        currentMarkings: parseJsonField(quote.markings),
         delivery: {
           type: quote.deliveryType,
-          address: quote.deliveryAddress,
+          address: parseJsonField(quote.deliveryAddress),
           billingAddressDifferent: quote.billingAddressDifferent,
-          billingAddress: quote.billingAddress,
+          billingAddress: parseJsonField(quote.billingAddress),
           individualPackaging: quote.individualPackaging || false,
           newCarton: quote.newCarton || false,
         },

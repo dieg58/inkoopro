@@ -91,17 +91,17 @@ export async function POST(request: NextRequest) {
       clientCompany: clientInfo?.company || client.company,
       clientPhone: clientInfo?.phone || client.phone,
       deliveryType: safeDelivery.type || 'pickup',
-      deliveryAddress: safeDelivery.address || null,
+      deliveryAddress: safeDelivery.address ? JSON.stringify(safeDelivery.address) : null,
       billingAddressDifferent: safeDelivery.billingAddressDifferent || false,
-      billingAddress: safeDelivery.billingAddress || null,
+      billingAddress: safeDelivery.billingAddress ? JSON.stringify(safeDelivery.billingAddress) : null,
       individualPackaging: safeDelivery.individualPackaging || false,
       newCarton: safeDelivery.newCarton || false,
       delayWorkingDays: safeDelay.workingDays || 10,
       delayType: safeDelay.type || 'standard',
       delayExpressDays: safeDelay.expressDays || null,
-      selectedProducts: selectedProducts || [],
-      markings: currentMarkings || [],
-      quoteItems: quoteItems || [],
+      selectedProducts: JSON.stringify(selectedProducts || []),
+      markings: JSON.stringify(currentMarkings || []),
+      quoteItems: JSON.stringify(quoteItems || []),
       totalHT: totalHT,
     }
 
@@ -118,7 +118,10 @@ export async function POST(request: NextRequest) {
           }
         },
       })
-      console.log(`✅ Devis mis à jour: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0}`)
+      const selectedProductsCount = typeof quote.selectedProducts === 'string' 
+        ? JSON.parse(quote.selectedProducts || '[]').length 
+        : (Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0)
+      console.log(`✅ Devis mis à jour: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${selectedProductsCount}`)
     } else {
       // Créer un nouveau devis
       console.log(`🆕 Création d'un nouveau devis pour le client ${dbClient.id}`)
@@ -130,7 +133,10 @@ export async function POST(request: NextRequest) {
           }
         },
       })
-      console.log(`✅ Nouveau devis créé: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0}`)
+      const selectedProductsCount = typeof quote.selectedProducts === 'string' 
+        ? JSON.parse(quote.selectedProducts || '[]').length 
+        : (Array.isArray(quote.selectedProducts) ? quote.selectedProducts.length : 0)
+      console.log(`✅ Nouveau devis créé: ${quote.id} - Titre: "${quote.title}" - Statut: ${quote.status} - Étape: ${quote.step} - Produits: ${selectedProductsCount}`)
     }
 
     return NextResponse.json({
