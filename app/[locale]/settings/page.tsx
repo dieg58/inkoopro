@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
-import { ArrowLeft, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { DeliveryType } from '@/types'
 import { AVAILABLE_COUNTRIES } from '@/lib/distance'
 
@@ -21,7 +20,6 @@ interface DeliveryAddress {
 }
 
 export default function SettingsPage() {
-  const router = useRouter()
   const t = useTranslations('settings')
   const commonT = useTranslations('common')
   const deliveryT = useTranslations('delivery')
@@ -129,15 +127,6 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto py-10 px-4 max-w-2xl">
-      <Button
-        variant="ghost"
-        onClick={() => router.push('/')}
-        className="mb-6"
-      >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        {commonT('back')}
-      </Button>
-
       <Card>
         <CardHeader>
           <CardTitle>{t('accountSettings')}</CardTitle>

@@ -98,7 +98,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
     return (
       <div className="flex h-screen bg-background overflow-hidden">
         <Sidebar client={client} onLogout={handleLogout} />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-y-auto">
           {children}
         </div>
       </div>

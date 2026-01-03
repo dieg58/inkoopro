@@ -84,7 +84,10 @@ export function Sidebar({ client, onLogout }: SidebarProps) {
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname === item.path || pathname?.startsWith(item.path)
+          // Correspondance exacte ou correspondance avec un slash supplémentaire
+          // Important : vérifier d'abord l'égalité exacte pour éviter que /quotes active /quote
+          const isActive = pathname === item.path || 
+            (pathname && pathname.startsWith(item.path + '/'))
           
           return (
             <Button

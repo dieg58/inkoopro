@@ -49,8 +49,8 @@ export default function LoginPage() {
           title: t('auth.loginSuccess'),
           description: t('auth.welcome', { name: data.client.name }),
         })
-        // Rediriger vers la page de devis après connexion
-        router.push(`/${locale}/quote`)
+        // Rediriger vers la page "Mes devis" après connexion
+        router.push(`/${locale}/quotes`)
         router.refresh()
       } else {
         // Vérifier si c'est un cas "client non trouvé" pour afficher un message spécial
