@@ -34,23 +34,29 @@ export async function POST(request: NextRequest) {
         })
       }
     } else {
-      // Pas de limite totale, synchroniser juste ce lot
-      syncLimit = batchSize
+      // Pas de limite totale = synchroniser TOUS les produits
+      // IMPORTANT: On passe undefined pour permettre à getProductsFromOdoo de continuer la pagination
+      // jusqu'à ce qu'il n'y ait plus de produits
+      syncLimit = undefined
     }
     
     // Synchroniser ce lot
+    // IMPORTANT: Si limit n'est pas fourni, on passe undefined pour permettre la pagination complète
     const result = await syncProductsFromOdoo(forceRefresh, syncLimit, offset)
     
     if (result.success) {
       const completed = limit ? (offset + result.count >= limit) : false
-      const hasMore = !completed && result.count === syncLimit // Si on a récupéré exactement le nombre demandé, il y a probablement plus
+      // Si on a récupéré exactement le nombre demandé (batchSize), il y a probablement plus de produits
+      // Si on a récupéré moins que batchSize, on a probablement atteint la fin
+      // Si limit n'est pas défini, on continue tant qu'on récupère batchSize produits
+      const hasMore = !completed && result.count >= batchSize
       
       return NextResponse.json({
         success: true,
         message: `${result.count} produit(s) synchronisé(s) dans ce lot`,
         count: result.count,
         offset: offset + result.count,
-        completed: completed || !hasMore,
+        completed: completed || result.count < batchSize, // Terminé si on a récupéré moins que batchSize
         hasMore: hasMore,
         totalSynced: offset + result.count,
       })

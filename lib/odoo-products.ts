@@ -520,6 +520,10 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
           allProducts = allProducts.slice(0, limit)
           console.log(`✅ Limite spécifiée atteinte: ${allProducts.length} produits`)
           hasMore = false
+        } else if (!limit) {
+          // Pas de limite : continuer la pagination jusqu'à ce qu'il n'y ait plus de produits
+          // On continue déjà avec offset += PAGE_SIZE ci-dessus
+          console.log(`📄 Pagination continue (pas de limite, total: ${allProducts.length})...`)
         }
       } catch (error) {
         console.error(`❌ Erreur lors de la récupération de la page ${pageNumber}:`, error)

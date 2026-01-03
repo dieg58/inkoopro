@@ -53,9 +53,10 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
     // La DB est la source de vérité persistante
     // Note: getProductsFromOdoo gère déjà la pagination complète
     // Si limit est spécifié, on récupère limit + offset produits pour avoir assez de produits après l'offset
-    // Si limit n'est pas spécifié, on récupère TOUS les produits (pas de limite)
+    // Si limit n'est pas spécifié, on récupère TOUS les produits (pas de limite) - on passe undefined pour continuer la pagination
+    // IMPORTANT: Ne pas passer de limite si on veut tous les produits, pour que la pagination continue
     const totalToFetch = limit ? limit + offset : undefined
-    console.log(`📥 Récupération de ${totalToFetch || 'tous les'} produits depuis Odoo...`)
+    console.log(`📥 Récupération de ${totalToFetch ? `${totalToFetch} produits` : 'TOUS les produits (pas de limite)'} depuis Odoo...`)
     
     const products = await getProductsFromOdoo(true, totalToFetch)
     
