@@ -119,16 +119,48 @@ export async function POST(request: NextRequest) {
     })
 
     // Construire l'URL de réinitialisation
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || request.headers.get('origin') || 'http://localhost:3000'
-    const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`
+    // En production, utiliser NEXT_PUBLIC_BASE_URL ou construire depuis les headers de la requête
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    if (!baseUrl) {
+      // Essayer de construire depuis les headers de la requête
+      const origin = request.headers.get('origin')
+      const host = request.headers.get('host')
+      const protocol = request.headers.get('x-forwarded-proto') || (origin ? new URL(origin).protocol : 'https')
+      
+      if (host) {
+        baseUrl = `${protocol}//${host}`
+      } else if (origin) {
+        baseUrl = origin
+      } else {
+        baseUrl = 'http://localhost:3000' // Fallback pour le développement local
+      }
+    }
+    
+    // S'assurer que l'URL ne se termine pas par un slash
+    baseUrl = baseUrl.replace(/\/$/, '')
+    // Utiliser /fr/reset-password par défaut (la locale sera gérée par le middleware)
+    const resetUrl = `${baseUrl}/fr/reset-password?token=${resetToken}`
+    
+    console.log('🔗 URL de réinitialisation construite:', {
+      baseUrl,
+      resetUrl: resetUrl.substring(0, 80) + '...',
+      hasToken: !!resetToken,
+    })
 
     // Envoyer l'email de réinitialisation
     try {
       const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+      const resendApiKey = process.env.RESEND_API_KEY
+      
+      if (!resendApiKey || resendApiKey === 're_h544tgd3_6p7U7ZSynxkGPiQF4zu4zmFQ') {
+        console.warn('⚠️  RESEND_API_KEY non configuré ou utilise la clé par défaut')
+      }
       
       console.log('📤 Envoi email de réinitialisation via Resend:', {
         from: fromEmail,
         to: email,
+        hasApiKey: !!resendApiKey && resendApiKey !== 're_h544tgd3_6p7U7ZSynxkGPiQF4zu4zmFQ',
+        resetUrl: resetUrl.substring(0, 80) + '...',
       })
 
       const { data, error } = await resend.emails.send({
@@ -182,14 +214,30 @@ L'équipe INKOO PRO
 
       if (error) {
         console.error('❌ Erreur Resend:', error)
+        console.error('   Détails:', JSON.stringify(error, null, 2))
         throw new Error(`Erreur lors de l'envoi de l'email: ${error.message || 'Erreur inconnue'}`)
       }
 
-      console.log('✅ Email de réinitialisation envoyé avec succès via Resend:', data?.id)
+      console.log('✅ Email de réinitialisation envoyé avec succès via Resend:', {
+        emailId: data?.id,
+        to: email,
+        from: fromEmail,
+      })
     } catch (emailError) {
       console.error('❌ Erreur lors de l\'envoi de l\'email:', emailError)
-      // On retourne quand même un succès pour des raisons de sécurité
-      // mais on log l'erreur pour le debugging
+      if (emailError instanceof Error) {
+        console.error('   Message:', emailError.message)
+        console.error('   Stack:', emailError.stack)
+      }
+      // En production, on peut vouloir retourner une erreur pour diagnostiquer
+      // Mais pour des raisons de sécurité, on retourne un succès générique
+      // L'erreur réelle est loggée pour le debugging
+      return NextResponse.json({
+        success: true,
+        message: 'Si un compte existe avec cet email, vous recevrez un email de réinitialisation.',
+        // En développement, on peut inclure l'erreur pour le debugging
+        ...(process.env.NODE_ENV === 'development' && { debugError: emailError instanceof Error ? emailError.message : String(emailError) }),
+      })
     }
 
     return NextResponse.json({
@@ -198,10 +246,16 @@ L'équipe INKOO PRO
     })
   } catch (error) {
     console.error('❌ Erreur lors de la demande de réinitialisation:', error)
+    if (error instanceof Error) {
+      console.error('   Message:', error.message)
+      console.error('   Stack:', error.stack)
+    }
     // Pour des raisons de sécurité, on retourne toujours un succès
     return NextResponse.json({
       success: true,
       message: 'Si un compte existe avec cet email, vous recevrez un email de réinitialisation.',
+      // En développement, on peut inclure l'erreur pour le debugging
+      ...(process.env.NODE_ENV === 'development' && { debugError: error instanceof Error ? error.message : String(error) }),
     })
   }
 }
