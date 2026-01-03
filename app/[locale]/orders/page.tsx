@@ -23,9 +23,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [client, setClient] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [projectStateFilter, setProjectStateFilter] = useState<string>('all')
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set())
   const [orderDetails, setOrderDetails] = useState<Record<number, { lines: OdooOrderLine[]; loading: boolean }>>({})
 
@@ -144,41 +142,35 @@ export default function OrdersPage() {
     }
   }
 
+  // Obtenir les statuts de projet uniques pour le filtre
+  const uniqueProjectStates = Array.from(new Set(orders.map(order => order.project_state).filter(Boolean))) as string[]
+
   // Filtrer et trier les commandes
   const filteredAndSortedOrders = orders
     .filter((order) => {
-      // Filtre par recherche
+      // Filtre par recherche (nom, numéro, statut)
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         const matchesName = order.name?.toLowerCase().includes(query)
         const matchesTitle = order.title?.toLowerCase().includes(query)
         const matchesId = order.id.toString().includes(query)
-        if (!matchesName && !matchesTitle && !matchesId) return false
+        const matchesState = translateOrderState(order.state).toLowerCase().includes(query)
+        if (!matchesName && !matchesTitle && !matchesId && !matchesState) return false
       }
 
-      // Filtre par statut
-      if (statusFilter !== 'all') {
-        if (order.state !== statusFilter) return false
+      // Filtre par statut de projet
+      if (projectStateFilter !== 'all') {
+        if (order.project_state !== projectStateFilter) return false
       }
 
       return true
     })
     .sort((a, b) => {
-      let comparison = 0
-
-      if (sortBy === 'date') {
-        const dateA = new Date(a.date_order || 0).getTime()
-        const dateB = new Date(b.date_order || 0).getTime()
-        comparison = dateA - dateB
-      } else if (sortBy === 'amount') {
-        comparison = (a.amount_total || 0) - (b.amount_total || 0)
-      }
-
-      return sortOrder === 'asc' ? comparison : -comparison
+      // Trier par date décroissante par défaut (plus récentes en premier)
+      const dateA = new Date(a.date_order || 0).getTime()
+      const dateB = new Date(b.date_order || 0).getTime()
+      return dateB - dateA
     })
-
-  // Obtenir les statuts uniques pour le filtre
-  const uniqueStates = Array.from(new Set(orders.map(order => order.state))).filter(Boolean)
 
   if (loading) {
     return (
@@ -216,58 +208,48 @@ export default function OrdersPage() {
         {/* Filtres */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Recherche */}
-              <div className="md:col-span-2">
+            <div className="flex gap-4 items-center">
+              {/* Recherche unifiée */}
+              <div className="flex-1">
                 <Input
-                  placeholder="Rechercher par titre, nom ou numéro de commande..."
+                  placeholder="Rechercher par nom, numéro de commande ou statut..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full"
                 />
               </div>
-
-              {/* Filtre par statut */}
-              <div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+              {/* Filtre par statut de projet */}
+              <div className="w-64">
+                <Select value={projectStateFilter} onValueChange={setProjectStateFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Tous les statuts" />
+                    <SelectValue placeholder="Tous les statuts de projet" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les statuts</SelectItem>
-                    {uniqueStates.map((state) => (
+                    <SelectItem value="all">Tous les statuts de projet</SelectItem>
+                    {uniqueProjectStates.map((state) => (
                       <SelectItem key={state} value={state}>
-                        {translateOrderState(state)}
+                        {translateProjectState(state)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Tri */}
-              <div className="flex gap-2">
-                <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'date' | 'amount')}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="date">Date</SelectItem>
-                    <SelectItem value="amount">Montant</SelectItem>
-                  </SelectContent>
-                </Select>
+              {(searchQuery || projectStateFilter !== 'all') && (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  title={sortOrder === 'asc' ? 'Croissant' : 'Décroissant'}
+                  onClick={() => {
+                    setSearchQuery('')
+                    setProjectStateFilter('all')
+                  }}
+                  title="Réinitialiser les filtres"
                 >
-                  {sortOrder === 'asc' ? '↑' : '↓'}
+                  <X className="h-4 w-4" />
                 </Button>
-              </div>
+              )}
             </div>
-
             {/* Indicateur de filtres actifs */}
-            {(searchQuery || statusFilter !== 'all') && (
+            {(searchQuery || projectStateFilter !== 'all') && (
               <div className="mt-4 flex items-center gap-2 flex-wrap">
                 <span className="text-sm text-muted-foreground">Filtres actifs:</span>
                 {searchQuery && (
@@ -281,28 +263,17 @@ export default function OrdersPage() {
                     </button>
                   </Badge>
                 )}
-                {statusFilter !== 'all' && (
+                {projectStateFilter !== 'all' && (
                   <Badge variant="secondary" className="gap-1">
-                    Statut: {translateOrderState(statusFilter)}
+                    Statut projet: {translateProjectState(projectStateFilter)}
                     <button
-                      onClick={() => setStatusFilter('all')}
+                      onClick={() => setProjectStateFilter('all')}
                       className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
                     >
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery('')
-                    setStatusFilter('all')
-                  }}
-                  className="h-6 text-xs"
-                >
-                  Réinitialiser
-                </Button>
               </div>
             )}
           </CardContent>
@@ -318,7 +289,7 @@ export default function OrdersPage() {
                 variant="outline"
                 onClick={() => {
                   setSearchQuery('')
-                  setStatusFilter('all')
+                  setProjectStateFilter('all')
                 }}
                 className="mt-4"
               >

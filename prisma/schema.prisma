@@ -40,6 +40,8 @@ model Client {
   defaultDeliveryMethod String? // 'pickup' | 'transporteur' | 'coursier'
   defaultDeliveryAddress String? // JSON string (SQLite ne supporte pas Json nativement)
   status              String   @default("pending") // 'pending' | 'approved' | 'rejected'
+  resetToken          String?  // Token pour la réinitialisation de mot de passe
+  resetTokenExpires   DateTime? // Date d'expiration du token de réinitialisation
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   approvedAt          DateTime?

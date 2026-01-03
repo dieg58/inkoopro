@@ -8,25 +8,25 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, UserPlus } from 'lucide-react'
+import { Loader2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const router = useRouter()
   const locale = useLocale()
   const t = useTranslations()
   const { toast } = useToast()
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!email || !password) {
+    if (!email) {
       toast({
         title: t('common.error'),
-        description: t('auth.fillAllFields'),
+        description: t('auth.emailRequired'),
         variant: 'destructive',
       })
       return
@@ -35,50 +35,28 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email }),
       })
 
       const data = await response.json()
 
       if (data.success) {
+        setEmailSent(true)
         toast({
-          title: t('auth.loginSuccess'),
-          description: t('auth.welcome', { name: data.client.name }),
+          title: t('auth.passwordResetEmailSent'),
+          description: t('auth.passwordResetEmailDescription'),
         })
-        // Rediriger vers la page "Mes devis" après connexion
-        router.push(`/${locale}/quotes`)
-        router.refresh()
       } else {
-        // Vérifier si c'est un cas "client non trouvé" pour afficher un message spécial
-        if (data.error === 'not_found' || response.status === 404) {
-          toast({
-            title: t('auth.notClientTitle'),
-            description: data.message || t('auth.notClientMessage'),
-            variant: 'default',
-            duration: 8000,
-            action: (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => router.push(`/${locale}/register`)}
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                {t('auth.registerButton')}
-              </Button>
-            ),
-          })
-        } else {
-          toast({
-            title: t('auth.loginError'),
-            description: data.message || data.error || t('auth.invalidCredentials'),
-            variant: 'destructive',
-          })
-        }
+        toast({
+          title: t('auth.passwordResetError'),
+          description: data.message || data.error || t('auth.passwordResetErrorMessage'),
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       toast({
@@ -91,13 +69,51 @@ export default function LoginPage() {
     }
   }
 
+  if (emailSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>{t('auth.passwordResetEmailSent')}</CardTitle>
+            <CardDescription>
+              {t('auth.passwordResetEmailDescription')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {t('auth.checkYourEmail', { email })}
+              </p>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setEmailSent(false)
+                  setEmail('')
+                }}
+              >
+                {t('auth.sendAnotherEmail')}
+              </Button>
+              <Link href={`/${locale}/login`}>
+                <Button variant="ghost" className="w-full">
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  {t('auth.backToLogin')}
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>{t('auth.loginTitle')}</CardTitle>
+          <CardTitle>{t('auth.forgotPasswordTitle')}</CardTitle>
           <CardDescription>
-            {t('auth.loginDescription')}
+            {t('auth.forgotPasswordDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -114,36 +130,22 @@ export default function LoginPage() {
                 disabled={isLoading}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">{t('auth.password')}</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder={t('auth.passwordPlaceholder')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t('auth.loggingIn')}
+                  {t('auth.sending')}
                 </>
               ) : (
-                t('auth.loginButton')
+                t('auth.sendResetEmail')
               )}
             </Button>
-            <div className="text-center mt-4">
-              <Link 
-                href={`/${locale}/forgot-password`}
-                className="text-sm text-primary hover:underline"
-              >
-                {t('auth.forgotPassword')}
-              </Link>
-            </div>
+            <Link href={`/${locale}/login`}>
+              <Button variant="ghost" className="w-full">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                {t('auth.backToLogin')}
+              </Button>
+            </Link>
           </form>
         </CardContent>
       </Card>

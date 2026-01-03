@@ -365,6 +365,11 @@ export function OrderSummary({
       // Frais fixes : 25€ par couleur
       const fixedFees = (serigraphiePricing.fixedFeePerColor || 0) * colorCount
       
+      // Surcharge pour les Pantone personnalisés (hors catalogue) : 25€ par couleur personnalisée
+      const pantoneColors = serigraphieOptions.pantoneColors || []
+      const customPantoneCount = pantoneColors.filter((color: any) => color.isCustom === true).length
+      const customPantoneSurcharge = customPantoneCount * 25 // 25€ par couleur personnalisée
+      
       // Calculer le total avant options et supplément express
       const basePrice = (unitPrice * totalQuantity) + fixedFees
       
@@ -378,8 +383,8 @@ export function OrderSummary({
         optionsSurcharge = (basePrice * totalSurchargePercent) / 100
       }
       
-      // Calculer le total avant supplément express
-      const baseTotal = (basePrice + optionsSurcharge) * emplacements
+      // Calculer le total avant supplément express (inclure la surcharge Pantone personnalisé)
+      const baseTotal = (basePrice + optionsSurcharge + customPantoneSurcharge) * emplacements
       
       // Appliquer le supplément express si applicable (10% par jour plus court)
       let expressSurcharge = 0
@@ -402,7 +407,7 @@ export function OrderSummary({
       return {
         unitPrice,
         quantity: totalQuantity,
-        fixedFees: fixedFees + (optionsSurcharge / emplacements), // Inclure le surcoût des options dans les frais fixes pour l'affichage
+        fixedFees: fixedFees + (optionsSurcharge / emplacements) + customPantoneSurcharge, // Inclure le surcoût des options et des Pantone personnalisés dans les frais fixes pour l'affichage
         emplacements,
         expressSurcharge,
         total,
@@ -457,8 +462,13 @@ export function OrderSummary({
         ? (broderiePricing.fixedFeeSmallDigitization || 0) // 40€ pour petite digitalisation
         : (broderiePricing.fixedFeeLargeDigitization || 0) // 60€ pour grande digitalisation
       
-      // Calculer le total avant supplément express
-      const baseTotal = ((unitPrice * totalQuantity) + fixedFees) * emplacements
+      // Surcharge pour les Pantone personnalisés (hors catalogue) : 25€ par couleur personnalisée
+      const pantoneColors = broderieOptions.pantoneColors || []
+      const customPantoneCount = pantoneColors.filter((color: any) => color.isCustom === true).length
+      const customPantoneSurcharge = customPantoneCount * 25 // 25€ par couleur personnalisée
+      
+      // Calculer le total avant supplément express (inclure la surcharge Pantone personnalisé)
+      const baseTotal = ((unitPrice * totalQuantity) + fixedFees + customPantoneSurcharge) * emplacements
       
       // Appliquer le supplément express si applicable (10% par jour plus court)
       let expressSurcharge = 0
@@ -481,7 +491,7 @@ export function OrderSummary({
       return {
         unitPrice,
         quantity: totalQuantity,
-        fixedFees,
+        fixedFees: fixedFees + customPantoneSurcharge, // Inclure la surcharge Pantone personnalisé dans les frais fixes pour l'affichage
         emplacements,
         expressSurcharge,
         total,
@@ -805,12 +815,40 @@ export function OrderSummary({
                       <span>{priceDetails.quantity} × {priceDetails.unitPrice.toFixed(2)} € HT</span>
                       <span>{unitPriceTotal.toFixed(2)} € HT</span>
                     </div>
-                    {priceDetails.fixedFees > 0 && (
-                      <div className="flex justify-between">
-                        <span>Frais fixes</span>
-                        <span>{priceDetails.fixedFees.toFixed(2)} € HT</span>
-                      </div>
-                    )}
+                    {priceDetails.fixedFees > 0 && (() => {
+                      // Calculer la surcharge Pantone personnalisé pour l'affichage
+                      let customPantoneSurcharge = 0
+                      if (marking.technique === 'serigraphie') {
+                        const opts = marking.techniqueOptions as any
+                        const pantoneColors = opts.pantoneColors || []
+                        const customPantoneCount = pantoneColors.filter((color: any) => color.isCustom === true).length
+                        customPantoneSurcharge = customPantoneCount * 25
+                      } else if (marking.technique === 'broderie') {
+                        const opts = marking.techniqueOptions as any
+                        const pantoneColors = opts.pantoneColors || []
+                        const customPantoneCount = pantoneColors.filter((color: any) => color.isCustom === true).length
+                        customPantoneSurcharge = customPantoneCount * 25
+                      }
+                      
+                      const baseFixedFees = priceDetails.fixedFees - customPantoneSurcharge
+                      
+                      return (
+                        <>
+                          {baseFixedFees > 0 && (
+                            <div className="flex justify-between">
+                              <span>Frais fixes</span>
+                              <span>{baseFixedFees.toFixed(2)} € HT</span>
+                            </div>
+                          )}
+                          {customPantoneSurcharge > 0 && (
+                            <div className="flex justify-between">
+                              <span>Surcharge Pantone sur mesure ({Math.round(customPantoneSurcharge / 25)} couleur{customPantoneSurcharge / 25 > 1 ? 's' : ''})</span>
+                              <span>{customPantoneSurcharge.toFixed(2)} € HT</span>
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
                   </div>
                 </div>
               )
