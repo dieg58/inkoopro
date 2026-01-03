@@ -389,71 +389,99 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
 
     // Récupérer les templates de produits depuis Odoo (product.template = produit avec variantes)
     // Pour Odoo, on doit inclure les identifiants dans chaque requête JSON-RPC
-    const requestBody = {
-      jsonrpc: '2.0',
-      method: 'call',
-      params: {
-        service: 'object',
-        method: 'execute_kw',
-        args: [
-          ODOO_DB,
-          auth.uid,
-          auth.password, // Passer le mot de passe dans la requête
-          'product.template', // Utiliser product.template pour avoir les variantes
-          'search_read',
-          [
-            productFilters, // Filtrer par catégorie ecommerce "textile"
-          ],
-          {
-            fields: [
-              'id', 
-              'name', 
-              'default_code', // Référence produit (ex: K3025)
-              'supplier_ref', // Supplier Reference (ex: CGTW02T)
-              'seller_ids', // IDs des fournisseurs (product.supplierinfo)
-              'description', 
-              'description_sale', 
-              'list_price', 
-              'categ_id', // Catégorie produit
-              'public_categ_ids', // Catégories ecommerce/public
-              'product_variant_ids', // IDs des variantes
-              'attribute_line_ids', // Attributs (couleurs, tailles)
+    // IMPORTANT: Utiliser la pagination pour récupérer TOUS les produits (Odoo limite souvent à 80-1000 résultats)
+    const PAGE_SIZE = 1000 // Taille de page pour la pagination
+    let allProducts: any[] = []
+    let offset = 0
+    let hasMore = true
+    
+    console.log('📤 Récupération paginée des produits depuis Odoo...')
+    
+    while (hasMore) {
+      const requestBody = {
+        jsonrpc: '2.0',
+        method: 'call',
+        params: {
+          service: 'object',
+          method: 'execute_kw',
+          args: [
+            ODOO_DB,
+            auth.uid,
+            auth.password, // Passer le mot de passe dans la requête
+            'product.template', // Utiliser product.template pour avoir les variantes
+            'search_read',
+            [
+              productFilters, // Filtrer par catégorie ecommerce "textile"
             ],
-            // Limiter le nombre de produits si spécifié
-            ...(limit ? { limit } : {}), // Ajouter limit seulement si défini
-            order: 'name asc',
-          },
-        ],
-      },
+            {
+              fields: [
+                'id', 
+                'name', 
+                'default_code', // Référence produit (ex: K3025)
+                'supplier_ref', // Supplier Reference (ex: CGTW02T)
+                'seller_ids', // IDs des fournisseurs (product.supplierinfo)
+                'description', 
+                'description_sale', 
+                'list_price', 
+                'categ_id', // Catégorie produit
+                'public_categ_ids', // Catégories ecommerce/public
+                'product_variant_ids', // IDs des variantes
+                'attribute_line_ids', // Attributs (couleurs, tailles)
+              ],
+              limit: limit ? Math.min(limit - allProducts.length, PAGE_SIZE) : PAGE_SIZE, // Limite par page
+              offset: offset, // Offset pour la pagination
+              order: 'name asc',
+            },
+          ],
+        },
+      }
+      
+      console.log(`📤 Requête Odoo page ${Math.floor(offset / PAGE_SIZE) + 1} (offset: ${offset}, limit: ${PAGE_SIZE})...`)
+      
+      const response = await fetch(`${ODOO_URL}/jsonrpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        console.error('❌ Erreur lors de la récupération des produits:', data.error)
+        break
+      }
+
+      // Avec execute_kw, le résultat est directement dans data.result
+      const products = data.result || []
+      
+      if (products.length === 0) {
+        hasMore = false
+        break
+      }
+      
+      allProducts.push(...products)
+      console.log(`✅ Page ${Math.floor(offset / PAGE_SIZE) + 1}: ${products.length} produit(s) récupéré(s) (total: ${allProducts.length})`)
+      
+      // Si on a récupéré moins de produits que la taille de page, on a atteint la fin
+      if (products.length < PAGE_SIZE) {
+        hasMore = false
+      } else {
+        offset += PAGE_SIZE
+      }
+      
+      // Si une limite est spécifiée et qu'on l'a atteinte, arrêter
+      if (limit && allProducts.length >= limit) {
+        allProducts = allProducts.slice(0, limit)
+        hasMore = false
+      }
     }
-    
-    console.log('📤 Requête Odoo (product.template avec variantes):', {
-      model: 'product.template',
-      method: 'search_read',
-      db: ODOO_DB,
-      uid: auth.uid,
-    })
-    
-    const response = await fetch(`${ODOO_URL}/jsonrpc`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    })
 
-    const data = await response.json()
-
-    if (data.error) {
-      console.error('❌ Erreur lors de la récupération des produits:', data.error)
-      return []
-    }
-
-    // Avec execute_kw, le résultat est directement dans data.result
-    const products = data.result || []
+    const products = allProducts
 
     // Log pour déboguer
-    console.log('📦 Réponse Odoo:', {
+    console.log('📦 Réponse Odoo finale:', {
       hasResult: !!products,
       resultLength: products.length || 0,
       firstProduct: products.length > 0 ? {
@@ -470,7 +498,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
       return []
     }
     
-    console.log(`✅ ${products.length} template(s) de produit(s) récupéré(s) depuis Odoo`)
+    console.log(`✅ ${products.length} template(s) de produit(s) récupéré(s) depuis Odoo (pagination complète)`)
 
     // Récupérer toutes les variantes de tous les produits
     // On va récupérer les attributs (couleurs, tailles) depuis les variantes
