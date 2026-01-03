@@ -148,7 +148,6 @@ export async function getInvoicesFromOdoo(client: { email: string; partnerId: nu
               'partner_id',
               'move_type',
               'ref',
-              'origin',
             ],
             order: 'invoice_date desc', // Plus récentes en premier
             limit: 100,
