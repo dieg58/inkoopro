@@ -35,13 +35,10 @@ export default async function LocaleLayout({
     notFound()
   }
 
-  // Enable static rendering and set the locale for this request
-  setRequestLocale(locale)
-
   // Providing all messages to the client
   // side is the easiest way to get started
   // Pass locale explicitly to getMessages
-  // Gérer les erreurs lors du chargement des messages
+  // Gérer les erreurs lors du chargement des messages AVANT setRequestLocale
   let messages
   try {
     messages = await getMessages({ locale })
@@ -66,6 +63,14 @@ export default async function LocaleLayout({
       // En dernier recours, utiliser un objet vide pour éviter les erreurs de rendu
       messages = {}
     }
+  }
+
+  // Set the locale AFTER loading messages to avoid issues
+  try {
+    setRequestLocale(locale)
+  } catch (error) {
+    console.error('Erreur lors de setRequestLocale:', error)
+    // Continuer même si setRequestLocale échoue
   }
 
   return (

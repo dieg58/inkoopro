@@ -53,30 +53,62 @@ export function ProductManager() {
   const handleSync = async (limit?: number) => {
     try {
       setLoading(true)
-      console.log('🔄 Début de la synchronisation...', { limit })
+      console.log('🔄 Début de la synchronisation progressive...', { limit })
       
-      const response = await fetch('/api/products/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ forceRefresh: true, limit }),
-      })
+      let offset = 0
+      let totalSynced = 0
+      let hasMore = true
+      const batchSize = 200 // Synchroniser 200 produits à la fois (compatible Vercel gratuit)
       
-      const data = await response.json()
-      console.log('📦 Réponse synchronisation:', data)
-      
-      if (data.success) {
-        toast({
-          title: t('syncSuccess'),
-          description: data.message || `${data.count} produit(s) synchronisé(s)`,
+      // Synchroniser progressivement par lots jusqu'à ce que tout soit fait
+      while (hasMore) {
+        const response = await fetch('/api/products/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            forceRefresh: true, 
+            limit: limit,
+            offset: offset,
+            batchSize: batchSize,
+          }),
         })
-        // Recharger les produits après la synchronisation
-        await fetchProducts()
-      } else {
-        toast({
-          title: 'Erreur de synchronisation',
-          description: data.error || 'Impossible de synchroniser les produits',
-          variant: 'destructive',
-        })
+        
+        const data = await response.json()
+        console.log(`📦 Lot synchronisé:`, data)
+        
+        if (data.success) {
+          totalSynced += data.count
+          offset = data.offset || offset + data.count
+          hasMore = data.hasMore === true && !data.completed
+          
+          // Afficher la progression
+          toast({
+            title: `Synchronisation en cours...`,
+            description: `${totalSynced} produit(s) synchronisé(s)${hasMore ? ' (suite...)' : ''}`,
+          })
+          
+          // Si terminé ou plus de produits, arrêter
+          if (data.completed || !hasMore) {
+            hasMore = false
+            toast({
+              title: t('syncSuccess'),
+              description: `${totalSynced} produit(s) synchronisé(s) avec succès`,
+            })
+            // Recharger les produits après la synchronisation complète
+            await fetchProducts()
+            break
+          }
+          
+          // Petite pause entre les lots pour éviter de surcharger
+          await new Promise(resolve => setTimeout(resolve, 500))
+        } else {
+          toast({
+            title: 'Erreur de synchronisation',
+            description: data.error || 'Impossible de synchroniser les produits',
+            variant: 'destructive',
+          })
+          hasMore = false
+        }
       }
     } catch (error) {
       console.error('Erreur synchronisation produits:', error)

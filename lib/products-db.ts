@@ -41,75 +41,122 @@ function cacheDataToProduct(cache: any): Product {
 /**
  * Synchronise les produits depuis Odoo vers la base de données
  * @param forceRefresh - Force la synchronisation même si les produits sont récents
+ * @param limit - Nombre maximum de produits à synchroniser dans ce lot
+ * @param offset - Offset pour la pagination (produits déjà synchronisés)
  */
-export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?: number): Promise<{ success: boolean; count: number; error?: string }> {
+export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?: number, offset: number = 0): Promise<{ success: boolean; count: number; error?: string }> {
   try {
-    console.log('🔄 Synchronisation des produits depuis Odoo...', { forceRefresh, limit })
+    console.log('🔄 Synchronisation des produits depuis Odoo...', { forceRefresh, limit, offset })
     
     // Toujours forcer le refresh pour ignorer le cache fichier (non persistant sur Vercel)
     // La DB est la source de vérité persistante
-    const products = await getProductsFromOdoo(true, limit)
+    // Note: getProductsFromOdoo gère déjà la pagination, mais on doit limiter le nombre total
+    const products = await getProductsFromOdoo(true, limit ? limit + offset : undefined)
     
-    if (products.length === 0) {
-      console.warn('⚠️  Aucun produit récupéré depuis Odoo')
-      return { success: false, count: 0, error: 'Aucun produit récupéré depuis Odoo' }
+    // Appliquer l'offset pour ne traiter que les produits de ce lot
+    const productsToSync = offset > 0 ? products.slice(offset) : products
+    const limitedProducts = limit ? productsToSync.slice(0, limit) : productsToSync
+    
+    if (limitedProducts.length === 0) {
+      console.warn('⚠️  Aucun produit à synchroniser dans ce lot')
+      return { success: true, count: 0 } // Pas d'erreur, juste rien à synchroniser
     }
     
-    console.log(`📦 ${products.length} produit(s) récupéré(s) depuis Odoo${limit ? ` (limite: ${limit})` : ''}`)
+    console.log(`📦 ${limitedProducts.length} produit(s) à synchroniser dans ce lot (${products.length} total récupéré(s) depuis Odoo)`)
     
-    // Synchroniser chaque produit
+    // Synchroniser les produits par lots pour améliorer les performances
+    const BATCH_SIZE = 100 // Traiter 100 produits à la fois
     let syncedCount = 0
     let updatedCount = 0
     let createdCount = 0
     let errorCount = 0
     
-    for (const product of products) {
-      try {
-        const cacheData = productToCacheData(product)
-        const odooId = parseInt(product.id)
-        
-        if (isNaN(odooId)) {
-          console.warn(`⚠️  ID produit invalide: ${product.id} pour ${product.name}`)
+    // Récupérer tous les IDs existants en une seule requête pour optimiser
+    const existingProducts = await prisma.productCache.findMany({
+      select: { odooId: true },
+    })
+    const existingIds = new Set(existingProducts.map(p => p.odooId))
+    
+    console.log(`📊 ${existingIds.size} produit(s) déjà en base de données`)
+    
+    // Traiter par lots
+    for (let i = 0; i < limitedProducts.length; i += BATCH_SIZE) {
+      const batch = limitedProducts.slice(i, i + BATCH_SIZE)
+      const batchNumber = Math.floor(i / BATCH_SIZE) + 1
+      const totalBatches = Math.ceil(products.length / BATCH_SIZE)
+      
+      console.log(`📦 Traitement du lot ${batchNumber}/${totalBatches} (${batch.length} produits)...`)
+      
+      // Préparer les données pour ce lot
+      const toCreate: any[] = []
+      const toUpdate: any[] = []
+      
+      for (const product of batch) {
+        try {
+          const cacheData = productToCacheData(product)
+          const odooId = parseInt(product.id)
+          
+          if (isNaN(odooId)) {
+            console.warn(`⚠️  ID produit invalide: ${product.id} pour ${product.name}`)
+            errorCount++
+            continue
+          }
+          
+          const now = new Date()
+          if (existingIds.has(odooId)) {
+            // Mettre à jour
+            toUpdate.push({
+              where: { odooId },
+              data: {
+                ...cacheData,
+                lastSync: now,
+              },
+            })
+          } else {
+            // Créer
+            toCreate.push({
+              ...cacheData,
+              lastSync: now,
+            })
+            existingIds.add(odooId) // Ajouter à l'ensemble pour éviter les doublons dans le même lot
+          }
+        } catch (error) {
           errorCount++
-          continue
+          console.error(`⚠️  Erreur lors de la préparation du produit ${product.id}:`, error)
         }
-        
-        
-        // Vérifier si le produit existe déjà
-        const existing = await prisma.productCache.findUnique({
-          where: { odooId },
-        })
-        
-        if (existing) {
-          // Mettre à jour le produit existant
-          await prisma.productCache.update({
-            where: { odooId },
-            data: {
-              ...cacheData,
-              lastSync: new Date(),
-            },
-          })
-          updatedCount++
-        } else {
-          // Créer un nouveau produit
-          await prisma.productCache.create({
-            data: {
-              ...cacheData,
-              lastSync: new Date(),
-            },
-          })
-          createdCount++
-        }
-        syncedCount++
-      } catch (error) {
-        errorCount++
-        console.error(`⚠️  Erreur lors de la synchronisation du produit ${product.id} (${product.name}):`, error)
-        if (error instanceof Error) {
-          console.error(`   Détails: ${error.message}`)
-          console.error(`   Stack: ${error.stack}`)
-        }
-        // Continuer avec les autres produits même en cas d'erreur
       }
+      
+      // Exécuter les créations par lots
+      if (toCreate.length > 0) {
+        try {
+          // Utiliser createMany pour créer plusieurs produits en une seule transaction
+          await prisma.productCache.createMany({
+            data: toCreate,
+            skipDuplicates: true, // Ignorer les doublons si présents
+          })
+          createdCount += toCreate.length
+          console.log(`   ✅ ${toCreate.length} produit(s) créé(s)`)
+        } catch (error) {
+          console.error(`   ❌ Erreur lors de la création du lot:`, error)
+          errorCount += toCreate.length
+        }
+      }
+      
+      // Exécuter les mises à jour une par une (Prisma ne supporte pas updateMany avec where unique)
+      if (toUpdate.length > 0) {
+        try {
+          await Promise.all(
+            toUpdate.map(update => prisma.productCache.update(update))
+          )
+          updatedCount += toUpdate.length
+          console.log(`   ✅ ${toUpdate.length} produit(s) mis à jour`)
+        } catch (error) {
+          console.error(`   ❌ Erreur lors de la mise à jour du lot:`, error)
+          errorCount += toUpdate.length
+        }
+      }
+      
+      syncedCount += toCreate.length + toUpdate.length
     }
     
     console.log(`✅ Synchronisation terminée: ${createdCount} créé(s), ${updatedCount} mis à jour, ${errorCount} erreur(s), ${syncedCount} total`)
