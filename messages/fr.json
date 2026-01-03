@@ -304,7 +304,9 @@
     "invalidToken": "Lien invalide",
     "invalidTokenDescription": "Le lien de réinitialisation est invalide ou a expiré. Veuillez demander un nouveau lien.",
     "validatingToken": "Validation du lien...",
-    "requestNewToken": "Demander un nouveau lien"
+    "requestNewToken": "Demander un nouveau lien",
+    "noPasswordTitle": "Mot de passe requis",
+    "noPasswordMessage": "Vous devez définir un mot de passe pour votre compte. Utilisez \"Mot de passe oublié\" pour créer votre mot de passe."
   },
   "settings": {
     "title": "Paramètres",

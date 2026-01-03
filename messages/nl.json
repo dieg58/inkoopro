@@ -284,7 +284,9 @@
     "invalidToken": "Ongeldige link",
     "invalidTokenDescription": "De resetlink is ongeldig of is verlopen. Vraag een nieuwe link aan.",
     "validatingToken": "Link valideren...",
-    "requestNewToken": "Nieuwe link aanvragen"
+    "requestNewToken": "Nieuwe link aanvragen",
+    "noPasswordTitle": "Wachtwoord vereist",
+    "noPasswordMessage": "U moet een wachtwoord instellen voor uw account. Gebruik \"Wachtwoord vergeten\" om uw wachtwoord aan te maken."
   },
   "settings": {
     "title": "Instellingen",

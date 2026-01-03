@@ -282,7 +282,9 @@
     "invalidToken": "Invalid link",
     "invalidTokenDescription": "The reset link is invalid or has expired. Please request a new link.",
     "validatingToken": "Validating link...",
-    "requestNewToken": "Request a new link"
+    "requestNewToken": "Request a new link",
+    "noPasswordTitle": "Password required",
+    "noPasswordMessage": "You must set a password for your account. Use \"Forgot password\" to create your password."
   },
   "settings": {
     "title": "Settings",

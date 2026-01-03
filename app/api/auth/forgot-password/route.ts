@@ -47,14 +47,46 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Pour des raisons de sécurité, on retourne toujours un succès même si le client n'existe pas
-    // Cela évite de révéler quels emails sont enregistrés dans le système
-    if (!client || !client.password) {
-      console.log('⚠️  Client non trouvé ou pas de mot de passe (compte Odoo uniquement):', email)
-      return NextResponse.json({
-        success: true,
-        message: 'Si un compte existe avec cet email, vous recevrez un email de réinitialisation.',
-      })
+    // Si le client n'existe pas dans la base locale, vérifier s'il existe dans Odoo
+    if (!client) {
+      console.log('🔍 Client non trouvé dans la base locale, vérification dans Odoo...')
+      const { verifyClientCredentials } = await import('@/lib/odoo-auth')
+      const odooResult = await verifyClientCredentials(email, '') // Vérifier seulement l'existence
+      
+      if (odooResult.success && odooResult.client) {
+        console.log('✅ Client trouvé dans Odoo, création du compte local...')
+        const odooClient = odooResult.client
+        
+        // Créer le compte local sans mot de passe (il sera défini via le token de réinitialisation)
+        client = await prisma.client.create({
+          data: {
+            email: odooClient.email,
+            odooId: odooClient.id,
+            name: odooClient.name,
+            company: odooClient.company || null,
+            phone: odooClient.phone || null,
+            street: odooClient.street || null,
+            city: odooClient.city || null,
+            zip: odooClient.zip || null,
+            country: odooClient.country || null,
+            status: 'approved', // Les clients Odoo sont automatiquement approuvés
+            // Pas de mot de passe - il sera défini via le token de réinitialisation
+          },
+        })
+      } else {
+        // Pour des raisons de sécurité, on retourne toujours un succès même si le client n'existe pas
+        console.log('⚠️  Client non trouvé dans Odoo ni dans la base locale:', email)
+        return NextResponse.json({
+          success: true,
+          message: 'Si un compte existe avec cet email, vous recevrez un email de réinitialisation.',
+        })
+      }
+    }
+    
+    // Si le client existe mais n'a pas de mot de passe, on peut quand même envoyer un email de réinitialisation
+    if (!client.password) {
+      console.log('⚠️  Client trouvé mais pas de mot de passe, envoi de l\'email de réinitialisation:', email)
+      // On continue pour générer le token et envoyer l'email
     }
 
     // Vérifier le statut du client

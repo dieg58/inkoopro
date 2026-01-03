@@ -72,13 +72,30 @@ export default function LoginPage() {
               </Button>
             ),
           })
-        } else {
-          toast({
-            title: t('auth.loginError'),
-            description: data.message || data.error || t('auth.invalidCredentials'),
-            variant: 'destructive',
-          })
-        }
+      } else if (data.error === 'no_password') {
+        // Client Odoo sans mot de passe local - doit utiliser "mot de passe oublié"
+        toast({
+          title: t('auth.noPasswordTitle'),
+          description: data.message || t('auth.noPasswordMessage'),
+          variant: 'default',
+          duration: 8000,
+          action: (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => router.push(`/${locale}/forgot-password`)}
+            >
+              {t('auth.forgotPassword')}
+            </Button>
+          ),
+        })
+      } else {
+        toast({
+          title: t('auth.loginError'),
+          description: data.message || data.error || t('auth.invalidCredentials'),
+          variant: 'destructive',
+        })
+      }
       }
     } catch (error) {
       toast({

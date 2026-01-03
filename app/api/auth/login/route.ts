@@ -19,76 +19,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // D'abord, vérifier si le client existe dans Odoo
-    // On essaie de s'authentifier directement avec l'email et le mot de passe
-    const odooResult = await verifyClientCredentials(email, password)
-
-    if (odooResult.success && odooResult.client) {
-      console.log('✅ Client trouvé dans Odoo, connexion réussie')
-      const client = odooResult.client // Stocker dans une variable pour TypeScript
-      
-      // Créer la session
-      await setClientSession(client)
-      
-      // Optionnellement, synchroniser les données dans la base locale
-      try {
-        // Vérifier d'abord si DATABASE_URL est configuré pour PostgreSQL
-        const databaseUrl = process.env.DATABASE_URL
-        if (databaseUrl && !databaseUrl.startsWith('file:')) {
-          await prisma.client.upsert({
-            where: { email },
-            update: {
-              odooId: client.id,
-              name: client.name,
-              company: client.company || null,
-              phone: client.phone || null,
-              street: client.street || null,
-              city: client.city || null,
-              zip: client.zip || null,
-              country: client.country || null,
-              status: 'approved', // Les clients Odoo sont automatiquement approuvés
-            },
-            create: {
-              email: client.email,
-              odooId: client.id,
-              name: client.name,
-              company: client.company || null,
-              phone: client.phone || null,
-              street: client.street || null,
-              city: client.city || null,
-              zip: client.zip || null,
-              country: client.country || null,
-              status: 'approved', // Les clients Odoo sont automatiquement approuvés
-            },
-          })
-        } else {
-          console.warn('⚠️  DATABASE_URL non configuré ou SQLite, skip sync locale')
-        }
-      } catch (syncError) {
-        console.warn('⚠️  Erreur lors de la synchronisation avec la base locale:', syncError)
-        // On continue quand même, la connexion fonctionne via Odoo
-      }
-      
-      // Créer aussi le cookie directement dans la réponse pour s'assurer qu'il est bien défini
-      const response = NextResponse.json({
-        success: true,
-        client: client,
-      })
-      
-      // Définir le cookie dans la réponse
-      response.cookies.set('odoo_client', JSON.stringify(client), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7 jours
-        path: '/', // Important : le cookie doit être disponible sur tout le site
-      })
-      
-      return response
-    }
-
-    // Si le client n'existe pas dans Odoo, vérifier dans la base locale
-    console.log('🔍 Client non trouvé dans Odoo, vérification dans la base locale...')
+    // D'abord, vérifier si le client existe dans la base locale avec un mot de passe
+    console.log('🔍 Vérification dans la base locale...')
     let localClient = null
     try {
       localClient = await prisma.client.findUnique({
@@ -130,11 +62,16 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Vérifier le mot de passe
+      // Vérifier le mot de passe - OBLIGATOIRE même pour les clients Odoo
       if (!localClient.password) {
+        console.log('⚠️  Client trouvé mais pas de mot de passe local, demande de réinitialisation requise')
         return NextResponse.json(
-          { success: false, error: 'Erreur de configuration du compte' },
-          { status: 500 }
+          { 
+            success: false, 
+            error: 'no_password',
+            message: 'Vous devez définir un mot de passe pour votre compte. Utilisez "Mot de passe oublié" pour créer votre mot de passe.' 
+          },
+          { status: 403 }
         )
       }
 
@@ -180,23 +117,68 @@ export async function POST(request: NextRequest) {
       return response
     }
 
-    // Si aucun compte trouvé ni dans Odoo ni dans la base locale
-    console.error('❌ Aucun compte trouvé pour:', email)
-    
-    // Si la base locale n'est pas accessible et que Odoo n'a pas trouvé le client,
-    // on retourne une erreur plus explicite
-    const databaseUrl = process.env.DATABASE_URL
-    if (!localClient && (!databaseUrl || (databaseUrl && databaseUrl.startsWith('file:')))) {
-      // Si on n'a pas de base PostgreSQL configurée, on ne peut que se baser sur Odoo
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'not_found',
-          message: 'Vous n\'êtes pas encore client chez nous. Créez votre compte pour accéder à nos services !'
-        },
-        { status: 404 }
-      )
+    // Si aucun compte trouvé dans la base locale, vérifier si le client existe dans Odoo
+    // Si oui, il doit créer un mot de passe via "mot de passe oublié"
+    if (!localClient) {
+      console.log('🔍 Client non trouvé dans la base locale, vérification dans Odoo...')
+      const odooResult = await verifyClientCredentials(email, '') // Vérifier seulement l'existence, pas le mot de passe
+      
+      // Si le client existe dans Odoo mais pas dans la base locale, on doit créer le compte local
+      // mais il doit d'abord définir un mot de passe via "mot de passe oublié"
+      if (odooResult.success && odooResult.client) {
+        console.log('✅ Client trouvé dans Odoo mais pas de compte local avec mot de passe')
+        
+        // Créer le compte local sans mot de passe (il devra le définir via "mot de passe oublié")
+        try {
+          const databaseUrl = process.env.DATABASE_URL
+          if (databaseUrl && !databaseUrl.startsWith('file:')) {
+            const odooClient = odooResult.client
+            await prisma.client.upsert({
+              where: { email },
+              update: {
+                odooId: odooClient.id,
+                name: odooClient.name,
+                company: odooClient.company || null,
+                phone: odooClient.phone || null,
+                street: odooClient.street || null,
+                city: odooClient.city || null,
+                zip: odooClient.zip || null,
+                country: odooClient.country || null,
+                status: 'approved', // Les clients Odoo sont automatiquement approuvés
+                // Ne pas définir de mot de passe - l'utilisateur devra le faire via "mot de passe oublié"
+              },
+              create: {
+                email: odooClient.email,
+                odooId: odooClient.id,
+                name: odooClient.name,
+                company: odooClient.company || null,
+                phone: odooClient.phone || null,
+                street: odooClient.street || null,
+                city: odooClient.city || null,
+                zip: odooClient.zip || null,
+                country: odooClient.country || null,
+                status: 'approved', // Les clients Odoo sont automatiquement approuvés
+                // Ne pas définir de mot de passe - l'utilisateur devra le faire via "mot de passe oublié"
+              },
+            })
+          }
+        } catch (syncError) {
+          console.warn('⚠️  Erreur lors de la création du compte local:', syncError)
+        }
+        
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'no_password',
+            message: 'Vous devez définir un mot de passe pour votre compte. Utilisez "Mot de passe oublié" pour créer votre mot de passe.' 
+          },
+          { status: 403 }
+        )
+      }
     }
+    
+    // Si aucun compte trouvé ni dans la base locale ni dans Odoo
+    console.error('❌ Aucun compte trouvé pour:', email)
     
     return NextResponse.json(
       { 

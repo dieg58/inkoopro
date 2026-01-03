@@ -86,13 +86,15 @@ async function authenticateOdoo(): Promise<{ uid: number; password: string } | n
 
 /**
  * Vérifie les identifiants d'un client et retourne ses informations
+ * Si password est vide, vérifie seulement l'existence du client dans Odoo
  */
 export async function verifyClientCredentials(
   email: string,
   password: string
 ): Promise<{ success: boolean; client?: OdooClient; error?: string }> {
   try {
-    console.log('🔍 Vérification des identifiants pour:', email)
+    const checkExistenceOnly = !password || password === ''
+    console.log('🔍 Vérification des identifiants pour:', email, checkExistenceOnly ? '(vérification existence uniquement)' : '')
     
     // Authentification avec les identifiants système
     const auth = await authenticateOdoo()
@@ -109,43 +111,49 @@ export async function verifyClientCredentials(
       return { success: false, error: 'Odoo non configuré' }
     }
     
-    // D'abord, vérifier le mot de passe en essayant de s'authentifier directement avec l'email et le mot de passe
-    // Cela vérifie si l'email correspond à un utilisateur Odoo (res.users) avec ce mot de passe
-    console.log('🔐 Tentative d\'authentification Odoo avec email et mot de passe...')
+    // Si on vérifie seulement l'existence (pas de mot de passe), on saute la vérification du mot de passe
     let passwordValid = false
     let userUid: number | null = null
 
-    try {
-      const passwordAuthResponse = await fetch(`${ODOO_URL}/web/session/authenticate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'call',
-          params: {
-            db: ODOO_DB,
-            login: email, // Utiliser l'email comme login
-            password: password, // Utiliser le mot de passe fourni
-          },
-        }),
-      })
-
-      const passwordAuthData = await passwordAuthResponse.json()
+    if (!checkExistenceOnly) {
+      // D'abord, vérifier le mot de passe en essayant de s'authentifier directement avec l'email et le mot de passe
+      // Cela vérifie si l'email correspond à un utilisateur Odoo (res.users) avec ce mot de passe
+      console.log('🔐 Tentative d\'authentification Odoo avec email et mot de passe...')
       
-      // Si l'authentification réussit, c'est que le mot de passe est correct
-      if (passwordAuthData.result && passwordAuthData.result.uid) {
-        console.log('✅ Authentification Odoo réussie avec les identifiants fournis, UID:', passwordAuthData.result.uid)
-        passwordValid = true
-        userUid = passwordAuthData.result.uid
-      } else {
-        console.log('⚠️  Authentification directe échouée, l\'email n\'est peut-être pas un utilisateur Odoo')
-        // L'email n'est peut-être pas un utilisateur Odoo, mais peut être un partenaire
-        // On continue pour vérifier si c'est un partenaire avec un champ personnalisé
+      try {
+        const passwordAuthResponse = await fetch(`${ODOO_URL}/web/session/authenticate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'call',
+            params: {
+              db: ODOO_DB,
+              login: email, // Utiliser l'email comme login
+              password: password, // Utiliser le mot de passe fourni
+            },
+          }),
+        })
+
+        const passwordAuthData = await passwordAuthResponse.json()
+        
+        // Si l'authentification réussit, c'est que le mot de passe est correct
+        if (passwordAuthData.result && passwordAuthData.result.uid) {
+          console.log('✅ Authentification Odoo réussie avec les identifiants fournis, UID:', passwordAuthData.result.uid)
+          passwordValid = true
+          userUid = passwordAuthData.result.uid
+        } else {
+          console.log('⚠️  Authentification directe échouée, l\'email n\'est peut-être pas un utilisateur Odoo')
+          // L'email n'est peut-être pas un utilisateur Odoo, mais peut être un partenaire
+          // On continue pour vérifier si c'est un partenaire avec un champ personnalisé
+        }
+      } catch (authError) {
+        console.error('❌ Erreur lors de la vérification du mot de passe:', authError)
       }
-    } catch (authError) {
-      console.error('❌ Erreur lors de la vérification du mot de passe:', authError)
+    } else {
+      console.log('🔍 Vérification de l\'existence uniquement (pas de vérification du mot de passe)')
     }
 
     // Rechercher le client (partner) par email pour récupérer ses informations
@@ -279,58 +287,64 @@ export async function verifyClientCredentials(
       is_company: partner.is_company,
     })
 
-    // Si l'authentification directe a échoué, vérifier avec un champ personnalisé
-    if (!passwordValid) {
-      console.log('🔍 Vérification avec champ personnalisé x_client_password...')
-      try {
-        const passwordRequest = {
-          jsonrpc: '2.0',
-          method: 'call',
-          params: {
-            service: 'object',
-            method: 'execute_kw',
-            args: [
-              ODOO_DB,
-              auth.uid,
-              auth.password,
-              'res.partner',
-              'read',
-              [[partner.id]],
-              { fields: ['x_client_password'] },
-            ],
-          },
-        }
-        
-        const passwordResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(passwordRequest),
-        })
-        const passwordData = await passwordResponse.json()
-        const storedPassword = passwordData.result?.[0]?.x_client_password
-        
-        if (storedPassword) {
-          if (storedPassword !== password) {
-            console.log('❌ Mot de passe incorrect (champ personnalisé)')
-            return { success: false, error: 'Mot de passe incorrect' }
+    // Si on vérifie seulement l'existence, on accepte directement
+    if (checkExistenceOnly) {
+      console.log('✅ Client trouvé dans Odoo (vérification existence uniquement)')
+      passwordValid = true
+    } else {
+      // Si l'authentification directe a échoué, vérifier avec un champ personnalisé
+      if (!passwordValid) {
+        console.log('🔍 Vérification avec champ personnalisé x_client_password...')
+        try {
+          const passwordRequest = {
+            jsonrpc: '2.0',
+            method: 'call',
+            params: {
+              service: 'object',
+              method: 'execute_kw',
+              args: [
+                ODOO_DB,
+                auth.uid,
+                auth.password,
+                'res.partner',
+                'read',
+                [[partner.id]],
+                { fields: ['x_client_password'] },
+              ],
+            },
           }
-          console.log('✅ Mot de passe correct (champ personnalisé)')
-          passwordValid = true
-        } else {
-          // Si aucun champ personnalisé, on accepte la connexion si l'email existe (compatibilité)
-          console.log('⚠️  Aucun champ personnalisé de mot de passe, connexion acceptée (compatibilité)')
+          
+          const passwordResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(passwordRequest),
+          })
+          const passwordData = await passwordResponse.json()
+          const storedPassword = passwordData.result?.[0]?.x_client_password
+          
+          if (storedPassword) {
+            if (storedPassword !== password) {
+              console.log('❌ Mot de passe incorrect (champ personnalisé)')
+              return { success: false, error: 'Mot de passe incorrect' }
+            }
+            console.log('✅ Mot de passe correct (champ personnalisé)')
+            passwordValid = true
+          } else {
+            // Si aucun champ personnalisé, on accepte la connexion si l'email existe (compatibilité)
+            console.log('⚠️  Aucun champ personnalisé de mot de passe, connexion acceptée (compatibilité)')
+            passwordValid = true
+          }
+        } catch (passwordError) {
+          // Si le champ personnalisé n'existe pas, on accepte la connexion (compatibilité)
+          console.log('⚠️  Champ personnalisé non disponible, connexion acceptée (compatibilité)')
           passwordValid = true
         }
-      } catch (passwordError) {
-        // Si le champ personnalisé n'existe pas, on accepte la connexion (compatibilité)
-        console.log('⚠️  Champ personnalisé non disponible, connexion acceptée (compatibilité)')
-        passwordValid = true
       }
-    }
 
-    // Si le mot de passe n'est toujours pas valide, retourner une erreur
-    if (!passwordValid) {
-      return { success: false, error: 'Mot de passe incorrect' }
+      // Si le mot de passe n'est toujours pas valide, retourner une erreur
+      if (!passwordValid) {
+        return { success: false, error: 'Mot de passe incorrect' }
+      }
     }
 
     // Récupérer le code pays si country_id est présent
