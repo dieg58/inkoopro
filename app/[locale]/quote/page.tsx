@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { LanguageSelector } from '@/components/LanguageSelector'
@@ -66,12 +66,30 @@ export default function QuotePage() {
   const [client, setClient] = useState<any>(null)
   const [isLoadingClient, setIsLoadingClient] = useState(true)
   const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null)
+  const currentQuoteIdRef = useRef<string | null>(null) // Ref pour accéder à la valeur actuelle sans déclencher de re-render
+  const isSavingRef = useRef(false) // Pour éviter les sauvegardes multiples simultanées
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Pour le debounce
+
+  // Mettre à jour la ref quand currentQuoteId change
+  useEffect(() => {
+    currentQuoteIdRef.current = currentQuoteId
+  }, [currentQuoteId])
 
   // Sauvegarder l'état dans la base de données
   const saveToDatabase = useCallback(async () => {
+    // Éviter les sauvegardes multiples simultanées
+    if (isSavingRef.current) {
+      console.log('⏸️  Sauvegarde déjà en cours, ignorée')
+      return
+    }
+    
+    isSavingRef.current = true
     try {
+      // Utiliser la ref pour obtenir la valeur actuelle sans dépendance
+      const quoteId = currentQuoteIdRef.current
+      
       console.log('📤 Envoi de la sauvegarde du devis:', {
-        quoteId: currentQuoteId,
+        quoteId: quoteId,
         title: quoteTitle,
         productsCount: selectedProducts.length,
         markingsCount: currentMarkings.length,
@@ -79,8 +97,8 @@ export default function QuotePage() {
       })
       
       // S'assurer que quoteId est une chaîne valide ou null (pas undefined)
-      const quoteIdToSend = currentQuoteId && typeof currentQuoteId === 'string' && currentQuoteId.trim() !== '' 
-        ? currentQuoteId 
+      const quoteIdToSend = quoteId && typeof quoteId === 'string' && quoteId.trim() !== '' 
+        ? quoteId 
         : null
       
       console.log('📤 Envoi de la sauvegarde du devis:', {
@@ -111,8 +129,11 @@ export default function QuotePage() {
       const data = await response.json()
       if (data.success) {
         if (data.quote && data.quote.id) {
-          console.log('✅ Devis sauvegardé avec succès:', data.quote.id, '- Titre:', data.quote.title)
-          setCurrentQuoteId(data.quote.id)
+          const newQuoteId = data.quote.id
+          console.log('✅ Devis sauvegardé avec succès:', newQuoteId, '- Titre:', data.quote.title)
+          // Mettre à jour à la fois le state et la ref
+          setCurrentQuoteId(newQuoteId)
+          currentQuoteIdRef.current = newQuoteId
         } else {
           console.warn('⚠️ Sauvegarde réussie mais pas d\'ID retourné:', data)
         }
@@ -137,8 +158,10 @@ export default function QuotePage() {
       } catch (localError) {
         console.error('Erreur sauvegarde localStorage fallback:', localError)
       }
+    } finally {
+      isSavingRef.current = false
     }
-  }, [currentQuoteId, quoteTitle, selectedProducts, quoteItems, currentMarkings, currentStep, delivery, delay, clientInfo])
+  }, [quoteTitle, selectedProducts, quoteItems, currentMarkings, currentStep, delivery, delay, clientInfo]) // Retirer currentQuoteId des dépendances
 
   // Charger l'état depuis la base de données
   useEffect(() => {
@@ -323,24 +346,39 @@ export default function QuotePage() {
     loadClient()
   }, [])
 
-  // Sauvegarder automatiquement à chaque changement
+  // Sauvegarder automatiquement à chaque changement (avec debounce)
   useEffect(() => {
+    // Nettoyer le timeout précédent
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+    
     // Sauvegarder seulement si on a au moins un titre (les produits peuvent être ajoutés plus tard)
     if (quoteTitle) {
-      console.log('💾 Sauvegarde automatique déclenchée:', { 
-        quoteId: currentQuoteId, 
-        title: quoteTitle, 
-        productsCount: selectedProducts.length,
-        step: currentStep 
-      })
-      saveToDatabase()
+      // Debounce : attendre 1 seconde après le dernier changement avant de sauvegarder
+      saveTimeoutRef.current = setTimeout(() => {
+        console.log('💾 Sauvegarde automatique déclenchée (debounced):', { 
+          quoteId: currentQuoteId, 
+          title: quoteTitle, 
+          productsCount: selectedProducts.length,
+          step: currentStep 
+        })
+        saveToDatabase()
+      }, 1000) // Attendre 1 seconde
     } else {
       console.log('⏸️  Sauvegarde automatique ignorée (pas de titre):', { 
         quoteTitle, 
         productsCount: selectedProducts.length 
       })
     }
-  }, [quoteTitle, selectedProducts, quoteItems, currentMarkings, currentStep, delivery, delay, clientInfo, saveToDatabase, currentQuoteId])
+    
+    // Cleanup function pour nettoyer le timeout
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [quoteTitle, selectedProducts, quoteItems, currentMarkings, currentStep, delivery, delay, clientInfo, saveToDatabase]) // Retirer currentQuoteId des dépendances
 
   const handleLogout = async () => {
     try {
