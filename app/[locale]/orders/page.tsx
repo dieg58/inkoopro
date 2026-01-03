@@ -11,7 +11,7 @@ import { Loader2, Package, Calendar, Euro, FileText, RefreshCw, Filter, X } from
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { OdooOrder } from '@/lib/odoo-orders'
-import { translateOrderState, getOrderStateColor } from '@/lib/odoo-orders'
+import { translateOrderState, getOrderStateColor, translateProjectState, getProjectStateColor } from '@/lib/odoo-orders'
 import { LanguageSelector } from '@/components/LanguageSelector'
 
 export default function OrdersPage() {
@@ -93,8 +93,9 @@ export default function OrdersPage() {
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         const matchesName = order.name?.toLowerCase().includes(query)
+        const matchesTitle = order.title?.toLowerCase().includes(query)
         const matchesId = order.id.toString().includes(query)
-        if (!matchesName && !matchesId) return false
+        if (!matchesName && !matchesTitle && !matchesId) return false
       }
 
       // Filtre par statut
@@ -161,7 +162,7 @@ export default function OrdersPage() {
               {/* Recherche */}
               <div className="md:col-span-2">
                 <Input
-                  placeholder="Rechercher par nom ou numéro de commande..."
+                  placeholder="Rechercher par titre, nom ou numéro de commande..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full"
@@ -290,20 +291,35 @@ export default function OrdersPage() {
               <Card key={order.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex justify-between items-start">
-                    <div>
+                    <div className="flex-1">
                       <CardTitle className="flex items-center gap-2">
                         <FileText className="h-5 w-5" />
-                        {order.name}
+                        {order.title || order.name}
                       </CardTitle>
                       <CardDescription className="mt-1">
+                        {order.title && order.name !== order.title && (
+                          <span className="block text-xs text-muted-foreground mb-1">
+                            {order.name}
+                          </span>
+                        )}
                         Commande #{order.id}
                       </CardDescription>
                     </div>
-                    <Badge
-                      className={`${getOrderStateColor(order.state)} text-white`}
-                    >
-                      {translateOrderState(order.state)}
-                    </Badge>
+                    <div className="flex flex-col gap-2 items-end">
+                      <Badge
+                        className={`${getOrderStateColor(order.state)} text-white`}
+                      >
+                        {translateOrderState(order.state)}
+                      </Badge>
+                      {order.project_state && (
+                        <Badge
+                          className={`${getProjectStateColor(order.project_state)} text-white`}
+                          variant="outline"
+                        >
+                          {translateProjectState(order.project_state)}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>

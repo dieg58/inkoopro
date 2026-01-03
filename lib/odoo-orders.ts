@@ -22,6 +22,10 @@ export interface OdooOrder {
   note?: string // Notes
   create_date: string // Date de création
   write_date: string // Date de modification
+  project_id?: [number, string] | false // [ID, Nom] du projet lié
+  project_task_id?: [number, string] | false // [ID, Nom] de la tâche du projet
+  title?: string // Titre du devis (récupéré depuis la DB locale)
+  project_state?: string // Statut du projet (récupéré depuis Odoo)
 }
 
 /**
@@ -110,6 +114,8 @@ export async function getClientOrders(client: OdooClient): Promise<OdooOrder[]> 
               'note',
               'create_date',
               'write_date',
+              'project_id',
+              'project_task_id',
             ],
             order: 'date_order desc', // Plus récentes en premier
             limit: 100, // Limite de 100 commandes
@@ -134,7 +140,70 @@ export async function getClientOrders(client: OdooClient): Promise<OdooOrder[]> 
     const orders = data.result || []
     console.log(`✅ ${orders.length} commande(s) trouvée(s) pour le client`)
 
-    return orders
+    // Enrichir les commandes avec le titre depuis la DB locale et le statut du projet
+    const enrichedOrders = await Promise.all(
+      orders.map(async (order: OdooOrder) => {
+        // Récupérer le titre depuis la DB locale (via odooOrderId)
+        let title: string | undefined
+        try {
+          const { prisma } = await import('./prisma')
+          const quote = await prisma.quote.findFirst({
+            where: { odooOrderId: order.id },
+            select: { title: true },
+          })
+          title = quote?.title || undefined
+        } catch (error) {
+          console.warn(`⚠️  Impossible de récupérer le titre pour la commande ${order.id}:`, error)
+        }
+
+        // Récupérer le statut du projet depuis Odoo
+        let projectState: string | undefined
+        if (order.project_id && Array.isArray(order.project_id) && order.project_id[0]) {
+          try {
+            const projectRequest = {
+              jsonrpc: '2.0',
+              method: 'call',
+              params: {
+                service: 'object',
+                method: 'execute_kw',
+                args: [
+                  ODOO_DB,
+                  auth.uid,
+                  auth.password,
+                  'project.project',
+                  'read',
+                  [[order.project_id[0]]],
+                  {
+                    fields: ['state'],
+                  },
+                ],
+              },
+            }
+
+            const projectResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(projectRequest),
+            })
+
+            const projectData = await projectResponse.json()
+            if (projectData.result && projectData.result[0]) {
+              projectState = projectData.result[0].state
+            }
+          } catch (error) {
+            console.warn(`⚠️  Impossible de récupérer le statut du projet pour la commande ${order.id}:`, error)
+          }
+        }
+
+        return {
+          ...order,
+          title,
+          project_state: projectState,
+        }
+      })
+    )
+
+    return enrichedOrders
   } catch (error) {
     console.error('❌ Erreur lors de la récupération des commandes:', error)
     return []
@@ -269,6 +338,34 @@ export function getOrderStateColor(state: string): string {
     sale: 'bg-green-500',
     done: 'bg-green-600',
     cancel: 'bg-red-500',
+  }
+  return colors[state] || 'bg-gray-500'
+}
+
+/**
+ * Traduit le statut du projet Odoo en français
+ */
+export function translateProjectState(state: string): string {
+  const translations: Record<string, string> = {
+    draft: 'En attente',
+    open: 'En production',
+    done: 'Livré',
+    cancel: 'Annulé',
+    close: 'Clôturé',
+  }
+  return translations[state] || state
+}
+
+/**
+ * Retourne la couleur du badge selon le statut du projet
+ */
+export function getProjectStateColor(state: string): string {
+  const colors: Record<string, string> = {
+    draft: 'bg-gray-500',
+    open: 'bg-blue-500',
+    done: 'bg-green-600',
+    cancel: 'bg-red-500',
+    close: 'bg-gray-600',
   }
   return colors[state] || 'bg-gray-500'
 }
