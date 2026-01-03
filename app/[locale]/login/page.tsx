@@ -153,15 +153,19 @@ export default function LoginPage() {
                 t('auth.loginButton')
               )}
             </Button>
-            <div className="text-center mt-4">
-              <Link 
-                href={`/${locale}/forgot-password`}
-                className="text-sm text-primary hover:underline"
-              >
-                {t('auth.forgotPassword')}
-              </Link>
-            </div>
           </form>
+          <div className="text-center mt-4">
+            <Link 
+              href={`/${locale}/forgot-password`}
+              className="text-sm text-primary hover:underline"
+              onClick={(e) => {
+                e.preventDefault()
+                router.push(`/${locale}/forgot-password`)
+              }}
+            >
+              {t('auth.forgotPassword')}
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
