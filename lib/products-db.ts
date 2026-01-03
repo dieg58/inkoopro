@@ -51,12 +51,21 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
     
     // Toujours forcer le refresh pour ignorer le cache fichier (non persistant sur Vercel)
     // La DB est la source de vérité persistante
-    // Note: getProductsFromOdoo gère déjà la pagination, mais on doit limiter le nombre total
-    const products = await getProductsFromOdoo(true, limit ? limit + offset : undefined)
+    // Note: getProductsFromOdoo gère déjà la pagination complète
+    // Si limit est spécifié, on récupère limit + offset produits pour avoir assez de produits après l'offset
+    // Si limit n'est pas spécifié, on récupère TOUS les produits (pas de limite)
+    const totalToFetch = limit ? limit + offset : undefined
+    console.log(`📥 Récupération de ${totalToFetch || 'tous les'} produits depuis Odoo...`)
+    
+    const products = await getProductsFromOdoo(true, totalToFetch)
+    
+    console.log(`📦 ${products.length} produit(s) récupéré(s) depuis Odoo`)
     
     // Appliquer l'offset pour ne traiter que les produits de ce lot
     const productsToSync = offset > 0 ? products.slice(offset) : products
     const limitedProducts = limit ? productsToSync.slice(0, limit) : productsToSync
+    
+    console.log(`📊 Après offset (${offset}) et limite (${limit || 'aucune'}): ${limitedProducts.length} produit(s) à synchroniser`)
     
     if (limitedProducts.length === 0) {
       console.warn('⚠️  Aucun produit à synchroniser dans ce lot')

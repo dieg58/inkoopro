@@ -394,10 +394,24 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
     let allProducts: any[] = []
     let offset = 0
     let hasMore = true
+    let consecutiveEmptyPages = 0
+    const MAX_CONSECUTIVE_EMPTY = 3 // Arrêter après 3 pages vides consécutives
     
-    console.log('📤 Récupération paginée des produits depuis Odoo...')
+    console.log('📤 Récupération paginée des produits depuis Odoo...', { limit: limit || 'aucune limite' })
     
     while (hasMore) {
+      // Calculer la limite pour cette page
+      let pageLimit = PAGE_SIZE
+      if (limit) {
+        const remaining = limit - allProducts.length
+        if (remaining <= 0) {
+          console.log(`✅ Limite atteinte: ${allProducts.length} produits récupérés`)
+          hasMore = false
+          break
+        }
+        pageLimit = Math.min(remaining, PAGE_SIZE)
+      }
+      
       const requestBody = {
         jsonrpc: '2.0',
         method: 'call',
@@ -428,7 +442,7 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
                 'product_variant_ids', // IDs des variantes
                 'attribute_line_ids', // Attributs (couleurs, tailles)
               ],
-              limit: limit ? Math.min(limit - allProducts.length, PAGE_SIZE) : PAGE_SIZE, // Limite par page
+              limit: pageLimit, // Limite par page
               offset: offset, // Offset pour la pagination
               order: 'name asc',
             },
@@ -436,45 +450,86 @@ export async function getProductsFromOdoo(forceRefresh: boolean = false, limit?:
         },
       }
       
-      console.log(`📤 Requête Odoo page ${Math.floor(offset / PAGE_SIZE) + 1} (offset: ${offset}, limit: ${PAGE_SIZE})...`)
+      const pageNumber = Math.floor(offset / PAGE_SIZE) + 1
+      console.log(`📤 Requête Odoo page ${pageNumber} (offset: ${offset}, limit: ${pageLimit}, total actuel: ${allProducts.length})...`)
       
-      const response = await fetch(`${ODOO_URL}/jsonrpc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      })
+      try {
+        const response = await fetch(`${ODOO_URL}/jsonrpc`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(60000), // Timeout de 60 secondes
+        })
 
-      const data = await response.json()
+        if (!response.ok) {
+          console.error(`❌ Erreur HTTP ${response.status} lors de la récupération de la page ${pageNumber}`)
+          break
+        }
 
-      if (data.error) {
-        console.error('❌ Erreur lors de la récupération des produits:', data.error)
-        break
-      }
+        const data = await response.json()
 
-      // Avec execute_kw, le résultat est directement dans data.result
-      const products = data.result || []
-      
-      if (products.length === 0) {
-        hasMore = false
-        break
-      }
-      
-      allProducts.push(...products)
-      console.log(`✅ Page ${Math.floor(offset / PAGE_SIZE) + 1}: ${products.length} produit(s) récupéré(s) (total: ${allProducts.length})`)
-      
-      // Si on a récupéré moins de produits que la taille de page, on a atteint la fin
-      if (products.length < PAGE_SIZE) {
-        hasMore = false
-      } else {
+        if (data.error) {
+          console.error(`❌ Erreur Odoo page ${pageNumber}:`, data.error)
+          // Ne pas arrêter immédiatement, continuer avec la page suivante
+          consecutiveEmptyPages++
+          if (consecutiveEmptyPages >= MAX_CONSECUTIVE_EMPTY) {
+            console.warn(`⚠️  ${MAX_CONSECUTIVE_EMPTY} pages vides consécutives, arrêt de la pagination`)
+            break
+          }
+          offset += PAGE_SIZE
+          continue
+        }
+
+        // Avec execute_kw, le résultat est directement dans data.result
+        const products = data.result || []
+        
+        if (products.length === 0) {
+          consecutiveEmptyPages++
+          console.log(`⚠️  Page ${pageNumber} vide (${consecutiveEmptyPages}/${MAX_CONSECUTIVE_EMPTY} pages vides consécutives)`)
+          
+          if (consecutiveEmptyPages >= MAX_CONSECUTIVE_EMPTY) {
+            console.log(`✅ Fin de la pagination après ${MAX_CONSECUTIVE_EMPTY} pages vides consécutives`)
+            hasMore = false
+            break
+          }
+          
+          // Continuer à la page suivante au cas où il y aurait des produits
+          offset += PAGE_SIZE
+          continue
+        }
+        
+        // Réinitialiser le compteur de pages vides si on a récupéré des produits
+        consecutiveEmptyPages = 0
+        
+        allProducts.push(...products)
+        console.log(`✅ Page ${pageNumber}: ${products.length} produit(s) récupéré(s) (total: ${allProducts.length})`)
+        
+        // Si on a récupéré moins de produits que la taille de page demandée, on a probablement atteint la fin
+        if (products.length < pageLimit) {
+          console.log(`✅ Fin de la pagination: moins de produits que demandé (${products.length} < ${pageLimit})`)
+          hasMore = false
+        } else {
+          // Continuer à la page suivante
+          offset += PAGE_SIZE
+        }
+        
+        // Si une limite est spécifiée et qu'on l'a atteinte, arrêter
+        if (limit && allProducts.length >= limit) {
+          allProducts = allProducts.slice(0, limit)
+          console.log(`✅ Limite spécifiée atteinte: ${allProducts.length} produits`)
+          hasMore = false
+        }
+      } catch (error) {
+        console.error(`❌ Erreur lors de la récupération de la page ${pageNumber}:`, error)
+        consecutiveEmptyPages++
+        if (consecutiveEmptyPages >= MAX_CONSECUTIVE_EMPTY) {
+          console.warn(`⚠️  ${MAX_CONSECUTIVE_EMPTY} erreurs consécutives, arrêt de la pagination`)
+          break
+        }
+        // Continuer avec la page suivante
         offset += PAGE_SIZE
-      }
-      
-      // Si une limite est spécifiée et qu'on l'a atteinte, arrêter
-      if (limit && allProducts.length >= limit) {
-        allProducts = allProducts.slice(0, limit)
-        hasMore = false
       }
     }
 
