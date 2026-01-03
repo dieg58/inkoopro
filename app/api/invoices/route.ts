@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Récupérer les factures depuis Odoo
-    const invoices = await getInvoicesFromOdoo(client.partnerId)
+    // Récupérer les factures depuis Odoo (pour tous les partenaires avec le même email)
+    const invoices = await getInvoicesFromOdoo(client)
 
     return NextResponse.json({
       success: true,

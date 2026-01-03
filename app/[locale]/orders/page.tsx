@@ -7,11 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, Package, Calendar, Euro, FileText, RefreshCw, Filter, X } from 'lucide-react'
+import { Loader2, Package, Calendar, Euro, FileText, RefreshCw, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { OdooOrder } from '@/lib/odoo-orders'
-import { translateOrderState, getOrderStateColor, translateProjectState, getProjectStateColor } from '@/lib/odoo-orders'
+import { OdooOrder, OdooOrderLine } from '@/lib/odoo-orders'
+import { translateOrderState, getOrderStateColor, translateProjectState, getProjectStateColor, translateDeliveryState, getDeliveryStateColor } from '@/lib/odoo-orders'
 import { LanguageSelector } from '@/components/LanguageSelector'
 
 export default function OrdersPage() {
@@ -26,6 +26,8 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set())
+  const [orderDetails, setOrderDetails] = useState<Record<number, { lines: OdooOrderLine[]; loading: boolean }>>({})
 
   const loadData = useCallback(async () => {
     try {
@@ -84,6 +86,62 @@ export default function OrdersPage() {
       style: 'currency',
       currency: 'EUR',
     }).format(amount)
+  }
+
+  const toggleOrder = async (orderId: number) => {
+    const isExpanded = expandedOrders.has(orderId)
+    
+    if (isExpanded) {
+      // Replier
+      setExpandedOrders(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(orderId)
+        return newSet
+      })
+    } else {
+      // Déplier - charger les détails si pas déjà chargés
+      setExpandedOrders(prev => new Set(prev).add(orderId))
+      
+      if (!orderDetails[orderId]) {
+        setOrderDetails(prev => ({
+          ...prev,
+          [orderId]: { lines: [], loading: true },
+        }))
+
+        try {
+          const response = await fetch(`/api/orders/${orderId}`)
+          const data = await response.json()
+
+          if (data.success) {
+            setOrderDetails(prev => ({
+              ...prev,
+              [orderId]: { lines: data.lines || [], loading: false },
+            }))
+          } else {
+            toast({
+              title: 'Erreur',
+              description: 'Impossible de charger les détails de la commande',
+              variant: 'destructive',
+            })
+            setOrderDetails(prev => ({
+              ...prev,
+              [orderId]: { lines: [], loading: false },
+            }))
+          }
+        } catch (error) {
+          console.error('Erreur lors du chargement des détails:', error)
+          toast({
+            title: 'Erreur',
+            description: 'Erreur lors du chargement des détails',
+            variant: 'destructive',
+          })
+          setOrderDetails(prev => ({
+            ...prev,
+            [orderId]: { lines: [], loading: false },
+          }))
+        }
+      }
+    }
   }
 
   // Filtrer et trier les commandes
@@ -287,74 +345,202 @@ export default function OrdersPage() {
               {filteredAndSortedOrders.length} commande{filteredAndSortedOrders.length > 1 ? 's' : ''} trouvée{filteredAndSortedOrders.length > 1 ? 's' : ''}
               {orders.length !== filteredAndSortedOrders.length && ` sur ${orders.length}`}
             </div>
-            {filteredAndSortedOrders.map((order) => (
-              <Card key={order.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        {order.title || order.name}
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        {order.title && order.name !== order.title && (
-                          <span className="block text-xs text-muted-foreground mb-1">
-                            {order.name}
-                          </span>
-                        )}
-                        Commande #{order.id}
-                      </CardDescription>
-                    </div>
-                    <div className="flex flex-col gap-2 items-end">
-                      <Badge
-                        className={`${getOrderStateColor(order.state)} text-white`}
-                      >
-                        {translateOrderState(order.state)}
-                      </Badge>
-                      {order.project_state && (
+            {filteredAndSortedOrders.map((order) => {
+              const isExpanded = expandedOrders.has(order.id)
+              const details = orderDetails[order.id]
+              
+              return (
+                <Card key={order.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <CardTitle className="flex items-center gap-2">
+                          <FileText className="h-5 w-5" />
+                          {order.title || order.name}
+                        </CardTitle>
+                        <CardDescription className="mt-1">
+                          {order.title && order.name !== order.title && (
+                            <span className="block text-xs text-muted-foreground mb-1">
+                              {order.name}
+                            </span>
+                          )}
+                          Commande #{order.id}
+                        </CardDescription>
+                      </div>
+                      <div className="flex flex-col gap-2 items-end">
                         <Badge
-                          className={`${getProjectStateColor(order.project_state)} text-white`}
-                          variant="outline"
+                          className={`${getOrderStateColor(order.state)} !text-white !border-transparent shadow-sm`}
                         >
-                          {translateProjectState(order.project_state)}
+                          {translateOrderState(order.state)}
                         </Badge>
-                      )}
+                        {order.project_state && (
+                          <Badge
+                            className={`${getProjectStateColor(order.project_state)} !text-white !border-transparent shadow-sm font-medium`}
+                          >
+                            {translateProjectState(order.project_state)}
+                          </Badge>
+                        )}
+                        {order.delivery_state && (
+                          <Badge
+                            className={`${getDeliveryStateColor(order.delivery_state)} !text-white !border-transparent shadow-sm font-medium`}
+                          >
+                            Livraison: {translateDeliveryState(order.delivery_state)}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Date de commande</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        {formatDate(order.date_order)}
-                      </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Date de commande</p>
+                        <p className="font-medium flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          {formatDate(order.date_order)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Montant total</p>
+                        <p className="font-semibold text-lg flex items-center gap-2">
+                          <Euro className="h-4 w-4" />
+                          {formatCurrency(order.amount_total)}
+                        </p>
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleOrder(order.id)}
+                          className="w-full"
+                        >
+                          {isExpanded ? (
+                            <>
+                              <ChevronUp className="h-4 w-4 mr-2" />
+                              Masquer les détails
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-4 w-4 mr-2" />
+                              Voir les détails
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Montant total</p>
-                      <p className="font-semibold text-lg flex items-center gap-2">
-                        <Euro className="h-4 w-4" />
-                        {formatCurrency(order.amount_total)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Statut</p>
-                      <Badge className={getOrderStateColor(order.state)}>
-                        {translateOrderState(order.state)}
-                      </Badge>
-                    </div>
-                  </div>
-                  {order.note && (
-                    <div className="mt-4 p-3 bg-background-subtle rounded-md border border-border">
-                      <p className="text-sm text-muted-foreground">
-                        <strong className="text-foreground">Note:</strong> {order.note}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    {order.note && (
+                      <div className="mt-4 p-3 bg-background-subtle rounded-md border border-border">
+                        <p className="text-sm text-muted-foreground">
+                          <strong className="text-foreground">Note:</strong> {order.note}
+                        </p>
+                      </div>
+                    )}
+                    {isExpanded && (
+                      <div className="mt-6 border-t pt-4">
+                        <h3 className="text-lg font-semibold mb-4">Détails de la commande</h3>
+                        {details?.loading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                            <span className="ml-2 text-sm text-muted-foreground">Chargement des détails...</span>
+                          </div>
+                        ) : details?.lines && details.lines.length > 0 ? (
+                          <div className="space-y-4">
+                            {(() => {
+                              // Grouper les lignes par produit
+                              const groupedByProduct = new Map<string, OdooOrderLine[]>()
+                              
+                              details.lines.forEach((line) => {
+                                const productId = Array.isArray(line.product_id) 
+                                  ? line.product_id[0].toString() 
+                                  : line.product_id?.toString() || 'unknown'
+                                const productName = Array.isArray(line.product_id) 
+                                  ? line.product_id[1] 
+                                  : line.name || 'Produit'
+                                
+                                // Utiliser le nom du produit comme clé pour regrouper
+                                const key = `${productId}-${productName}`
+                                
+                                if (!groupedByProduct.has(key)) {
+                                  groupedByProduct.set(key, [])
+                                }
+                                groupedByProduct.get(key)!.push(line)
+                              })
+                              
+                              return Array.from(groupedByProduct.entries()).map(([key, lines]) => {
+                                const firstLine = lines[0]
+                                const productName = Array.isArray(firstLine.product_id) 
+                                  ? firstLine.product_id[1] 
+                                  : firstLine.name || 'Produit'
+                                
+                                // Collecter toutes les tailles uniques pour ce produit
+                                const allSizes = new Set<string>()
+                                let totalQuantity = 0
+                                let totalSubtotal = 0
+                                
+                                lines.forEach((line) => {
+                                  totalQuantity += line.product_uom_qty
+                                  totalSubtotal += line.price_subtotal
+                                  if (line.sizes && line.sizes.length > 0) {
+                                    line.sizes.forEach(size => allSizes.add(size))
+                                  }
+                                })
+                                
+                                const sortedSizes = Array.from(allSizes).sort((a, b) => {
+                                  // Trier les tailles : S, M, L, XL, 2XL, etc.
+                                  const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL']
+                                  const indexA = sizeOrder.indexOf(a.toUpperCase())
+                                  const indexB = sizeOrder.indexOf(b.toUpperCase())
+                                  if (indexA !== -1 && indexB !== -1) return indexA - indexB
+                                  if (indexA !== -1) return -1
+                                  if (indexB !== -1) return 1
+                                  return a.localeCompare(b)
+                                })
+                                
+                                return (
+                                  <div key={key} className="p-4 bg-background-subtle rounded-md border border-border">
+                                    <div className="flex justify-between items-start mb-3">
+                                      <div className="flex-1">
+                                        <p className="font-medium text-foreground">{productName}</p>
+                                        {firstLine.name && firstLine.name !== productName && (
+                                          <p className="text-sm text-muted-foreground mt-1">{firstLine.name}</p>
+                                        )}
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-semibold text-foreground">
+                                          {formatCurrency(totalSubtotal)}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Quantité totale: {totalQuantity}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {sortedSizes.length > 0 && (
+                                      <div className="mt-3 pt-3 border-t border-border">
+                                        <p className="text-sm font-medium text-foreground mb-2">Tailles:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {sortedSizes.map((size) => (
+                                            <Badge key={size} variant="outline" className="font-normal">
+                                              {size}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })
+                            })()}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            Aucun détail disponible pour cette commande
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
       </div>

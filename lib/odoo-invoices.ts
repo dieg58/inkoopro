@@ -64,8 +64,9 @@ async function authenticateOdoo(): Promise<{ uid: number; password: string } | n
 
 /**
  * Récupère les factures d'un client depuis Odoo
+ * @param client - Objet client avec email et partnerId
  */
-export async function getInvoicesFromOdoo(partnerId: number): Promise<OdooInvoice[]> {
+export async function getInvoicesFromOdoo(client: { email: string; partnerId: number }): Promise<OdooInvoice[]> {
   try {
     if (!ODOO_URL || !ODOO_DB) {
       console.warn('⚠️  Odoo non configuré')
@@ -78,7 +79,41 @@ export async function getInvoicesFromOdoo(partnerId: number): Promise<OdooInvoic
       return []
     }
 
-    // Récupérer les factures client (out_invoice) pour ce partenaire
+    // Récupérer tous les partenaires avec le même email (comptes de livraison inclus)
+    const partnerSearchRequest = {
+      jsonrpc: '2.0',
+      method: 'call',
+      params: {
+        service: 'object',
+        method: 'execute_kw',
+        args: [
+          ODOO_DB,
+          auth.uid,
+          auth.password,
+          'res.partner',
+          'search',
+          [[['email', '=', client.email]]],
+        ],
+      },
+    }
+
+    const partnerSearchResponse = await fetch(`${ODOO_URL}/jsonrpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(partnerSearchRequest),
+    })
+
+    const partnerSearchData = await partnerSearchResponse.json()
+    let partnerIds: number[] = [client.partnerId] // Inclure au minimum le partenaire principal
+
+    if (!partnerSearchData.error && partnerSearchData.result && partnerSearchData.result.length > 0) {
+      partnerIds = partnerSearchData.result
+      console.log(`✅ ${partnerIds.length} partenaire(s) trouvé(s) avec l'email ${client.email}:`, partnerIds)
+    } else {
+      console.log('⚠️  Aucun autre partenaire trouvé avec le même email, utilisation du partenaire principal uniquement')
+    }
+
+    // Récupérer les factures client (out_invoice) pour tous les partenaires avec le même email
     // Dans Odoo moderne (v14+), les factures sont dans account.move
     // Dans les anciennes versions, c'est account.invoice
     const request = {
@@ -95,7 +130,7 @@ export async function getInvoicesFromOdoo(partnerId: number): Promise<OdooInvoic
           'search_read',
           [
             [
-              ['partner_id', '=', partnerId],
+              ['partner_id', 'in', partnerIds],
               ['move_type', '=', 'out_invoice'], // Factures client uniquement
             ],
           ],
