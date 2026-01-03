@@ -15,8 +15,7 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
   },
   
-  // Optimisations de compilation
-  swcMinify: true, // Utiliser SWC pour minifier (plus rapide que Terser)
+  // Note: swcMinify est activé par défaut dans Next.js 16, plus besoin de le spécifier
 }
 
 module.exports = withNextIntl(nextConfig)

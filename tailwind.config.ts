@@ -22,11 +22,15 @@ const config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
+        background: {
+          DEFAULT: "hsl(var(--background))",
+          subtle: "hsl(40, 15%, 96%)", // #F7F6F2
+        },
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(120, 8%, 38%)", // #5A6658 - Slightly darker for hover
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -52,6 +56,28 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // INKOO specific colors
+        inkoo: {
+          text: {
+            primary: "#1A1A1A",
+            body: "#4A4A4A",
+          },
+          bg: {
+            primary: "#FAF9F6",
+            subtle: "#F7F6F2",
+          },
+          accent: {
+            DEFAULT: "#6B7769",
+            hover: "#5A6658",
+          },
+          border: {
+            DEFAULT: "#E0DFDB",
+            subtle: "#F0EFEB",
+          },
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'IBM Plex Sans', 'Source Sans 3', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

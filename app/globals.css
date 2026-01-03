@@ -4,26 +4,39 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* INKOO Brand Colors - Warm, Natural, Sustainable */
+    --background: 40 20% 98%;           /* #FAF9F6 - Warm off-white */
+    --foreground: 0 0% 10%;            /* #1A1A1A - Very dark gray */
+    --card: 0 0% 100%;                 /* Pure white for cards */
+    --card-foreground: 0 0% 10%;       /* #1A1A1A */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 0 0% 10%;
+    
+    /* Primary - Soft muted green (earth tone) */
+    --primary: 120 8% 45%;             /* #6B7769 - Natural green */
+    --primary-foreground: 0 0% 100%;   /* White text on primary */
+    
+    /* Secondary - Warm beige */
+    --secondary: 40 15% 96%;           /* #F7F6F2 - Subtle beige */
+    --secondary-foreground: 0 0% 10%;  /* Dark text on secondary */
+    
+    /* Muted - Soft gray */
+    --muted: 40 10% 95%;               /* Very light warm gray */
+    --muted-foreground: 0 0% 29%;      /* #4A4A4A - Medium gray */
+    
+    /* Accent - Natural green (lighter) */
+    --accent: 120 8% 50%;              /* Slightly lighter green */
+    --accent-foreground: 0 0% 10%;
+    
+    /* Destructive - Muted terracotta (not bright red) */
+    --destructive: 0 20% 55%;          /* #8B6F6F - Muted terracotta */
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders - Very soft gray */
+    --border: 40 8% 87%;               /* #E0DFDB - Soft gray */
+    --input: 40 8% 87%;
+    --ring: 120 8% 45%;                /* Match primary for focus */
+    --radius: 0.375rem;                /* 6px - Subtle rounded corners */
   }
 
   .dark {
@@ -55,6 +68,33 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', 'IBM Plex Sans', 'Source Sans 3', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* INKOO Typography Scale */
+  h1 {
+    @apply text-[36px] leading-[1.4] font-semibold text-foreground;
+  }
+  
+  h2 {
+    @apply text-[28px] leading-[1.4] font-semibold text-foreground;
+  }
+  
+  h3 {
+    @apply text-[22px] leading-[1.5] font-semibold text-foreground;
+  }
+  
+  h4 {
+    @apply text-[18px] leading-[1.5] font-medium text-foreground;
+  }
+  
+  /* Subtle focus states */
+  *:focus-visible {
+    @apply outline-2 outline-primary outline-offset-2;
   }
 }
 

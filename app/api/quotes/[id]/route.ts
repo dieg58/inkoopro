@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Récupérer le client depuis la session
@@ -34,9 +34,10 @@ export async function GET(
     }
 
     // Récupérer le devis
+    const { id } = await params
     const quote = await prisma.quote.findFirst({
       where: {
-        id: params.id,
+        id,
         clientId: dbClient.id, // Vérifier que le devis appartient au client
       },
     })

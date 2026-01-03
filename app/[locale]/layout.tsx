@@ -7,6 +7,7 @@ import { Inter } from "next/font/google"
 import "../globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import { ContactButton } from "@/components/ContactForm"
+import { ClientLayout } from "@/components/ClientLayout"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -25,11 +26,13 @@ export const dynamic = 'force-dynamic'
 
 export default async function LocaleLayout({
   children,
-  params: { locale }
+  params
 }: {
   children: React.ReactNode
-  params: { locale: string }
+  params: Promise<{ locale: string }>
 }) {
+  const { locale } = await params
+  
   // Validate that the incoming `locale` parameter is valid
   if (!locales.includes(locale as any)) {
     notFound()
@@ -74,13 +77,15 @@ export default async function LocaleLayout({
   }
 
   return (
-    <html lang={locale}>
+    <html lang={locale} suppressHydrationWarning>
       <body className={inter.className}>
         <NextIntlClientProvider messages={messages}>
-          {children}
+          <ClientLayout>
+            {children}
+          </ClientLayout>
+          <Toaster />
+          <ContactButton />
         </NextIntlClientProvider>
-        <Toaster />
-        <ContactButton />
       </body>
     </html>
   )
