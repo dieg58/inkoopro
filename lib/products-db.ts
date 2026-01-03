@@ -80,10 +80,10 @@ export async function syncProductsFromOdoo(forceRefresh: boolean = false, limit?
     console.log(`📊 ${existingIds.size} produit(s) déjà en base de données`)
     
     // Traiter par lots
+    const totalBatches = Math.ceil(limitedProducts.length / BATCH_SIZE)
     for (let i = 0; i < limitedProducts.length; i += BATCH_SIZE) {
       const batch = limitedProducts.slice(i, i + BATCH_SIZE)
       const batchNumber = Math.floor(i / BATCH_SIZE) + 1
-      const totalBatches = Math.ceil(products.length / BATCH_SIZE)
       
       console.log(`📦 Traitement du lot ${batchNumber}/${totalBatches} (${batch.length} produits)...`)
       
